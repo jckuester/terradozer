@@ -28,10 +28,11 @@ func main() {
 
 	for _, addr := range resourceInstances {
 		if is := state.ResourceInstance(addr); is.HasCurrent() {
-			logrus.WithFields(map[string]interface{}{
-				"mode": addr.Resource.Resource.Mode,
-				"id":   is.Current.AttrsFlat["id"],
-			}).Print(addr.String())
+			if addr.Resource.Resource.Mode == addrs.ManagedResourceMode {
+				logrus.WithFields(map[string]interface{}{
+					"id": is.Current.AttrsFlat["id"],
+				}).Print(addr.String())
+			}
 		}
 	}
 }
