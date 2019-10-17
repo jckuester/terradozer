@@ -13,18 +13,25 @@ import (
 )
 
 func main() {
+	logrus.SetFormatter(&logrus.TextFormatter{
+		DisableTimestamp: true,
+	})
+
 	stateFile, err := getStateFromPath("terraform.tfstate")
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to read tfstate file")
 	}
 	state := stateFile.State
 
-	var addrs []addrs.AbsResourceInstance
-	addrs, _ = lookupAllResourceInstanceAddrs(state)
+	var resourceInstances []addrs.AbsResourceInstance
+	resourceInstances, _ = lookupAllResourceInstanceAddrs(state)
 
-	for _, addr := range addrs {
-		if is := state.ResourceInstance(addr); is != nil {
-			logrus.Printf("%s %s\n", addr.Resource.Resource.Mode, addr.String())
+	for _, addr := range resourceInstances {
+		if is := state.ResourceInstance(addr); is.HasCurrent() {
+			logrus.WithFields(map[string]interface{}{
+				"mode": addr.Resource.Resource.Mode,
+				"id":   is.Current.AttrsFlat["id"],
+			}).Print(addr.String())
 		}
 	}
 }
