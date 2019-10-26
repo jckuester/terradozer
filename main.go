@@ -6,20 +6,32 @@ import (
 	"sort"
 
 	"github.com/hashicorp/terraform/addrs"
+	"github.com/hashicorp/terraform/plugin"
+	"github.com/hashicorp/terraform/plugin/discovery"
+	"github.com/hashicorp/terraform/providers"
 	"github.com/hashicorp/terraform/states"
 	"github.com/hashicorp/terraform/states/statefile"
 	"github.com/hashicorp/terraform/tfdiags"
 	"github.com/sirupsen/logrus"
 )
 
+type TerraformProvider struct {
+	providers.Interface
+}
+
 func main() {
 	logrus.SetFormatter(&logrus.TextFormatter{
 		DisableTimestamp: true,
 	})
 
+	_, err := loadAWSProvider()
+	if err != nil {
+		logrus.WithError(err).Fatal("failed to load AWS resource provider")
+	}
+
 	stateFile, err := getStateFromPath("terraform.tfstate")
 	if err != nil {
-		logrus.WithError(err).Fatal("failed to read tfstate file")
+		logrus.WithError(err).Fatal("failed to read local terraform.tfstate file")
 	}
 	state := stateFile.State
 
@@ -34,6 +46,43 @@ func main() {
 				}).Print(addr.String())
 			}
 		}
+	}
+}
+
+func loadAWSProvider() (*TerraformProvider, error) {
+	awsProviderPluginData := discovery.PluginMeta{
+		Name:    "terraform-provider-aws",
+		Version: "v2.33.0",
+		Path:    "./terraform-provider-aws_v2.33.0_x4",
+	}
+
+	awsProvider, err := providerFactory(awsProviderPluginData)()
+	if err != nil {
+		return nil, err
+	}
+	return &TerraformProvider{awsProvider}, nil
+}
+
+// copied from github.com/hashicorp/terraform/command/plugins.go
+func providerFactory(meta discovery.PluginMeta) providers.Factory {
+	return func() (providers.Interface, error) {
+		client := plugin.Client(meta)
+		// Request the RPC client so we can get the provider
+		// so we can build the actual RPC-implemented provider.
+		rpcClient, err := client.Client()
+		if err != nil {
+			return nil, err
+		}
+
+		raw, err := rpcClient.Dispense(plugin.ProviderPluginName)
+		if err != nil {
+			return nil, err
+		}
+
+		// store the client so that the plugin can kill the child process
+		p := raw.(*plugin.GRPCProvider)
+		p.PluginClient = client
+		return p, nil
 	}
 }
 
