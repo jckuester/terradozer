@@ -29,21 +29,25 @@ func main() {
 		logrus.WithError(err).Fatal("failed to load AWS resource provider")
 	}
 
-	stateFile, err := getStateFromPath("terraform.tfstate")
+	state, err := getState()
 	if err != nil {
-		logrus.WithError(err).Fatal("failed to read local terraform.tfstate file")
+		logrus.WithError(err).Fatal("failed to read tfstate from local file")
 	}
-	state := stateFile.State
 
-	var resourceInstances []addrs.AbsResourceInstance
-	resourceInstances, _ = lookupAllResourceInstanceAddrs(state)
+	resInstances, diagnostics := lookupAllResourceInstanceAddrs(state)
+	if diagnostics.HasErrors() {
+		logrus.WithError(diagnostics.Err()).Fatal("failed to lookup resource instance addresses")
+	}
 
-	for _, addr := range resourceInstances {
-		if is := state.ResourceInstance(addr); is.HasCurrent() {
-			if addr.Resource.Resource.Mode == addrs.ManagedResourceMode {
+	for _, resAddr := range resInstances {
+		if resInstance := state.ResourceInstance(resAddr); resInstance.HasCurrent() {
+			resMode := resAddr.Resource.Resource.Mode
+			resID := resInstance.Current.AttrsFlat["id"]
+
+			if resMode == addrs.ManagedResourceMode {
 				logrus.WithFields(map[string]interface{}{
-					"id": is.Current.AttrsFlat["id"],
-				}).Print(addr.String())
+					"id": resID,
+				}).Print(resAddr.String())
 			}
 		}
 	}
@@ -84,6 +88,14 @@ func providerFactory(meta discovery.PluginMeta) providers.Factory {
 		p.PluginClient = client
 		return p, nil
 	}
+}
+
+func getState() (*states.State, error) {
+	stateFile, err := getStateFromPath("terraform.tfstate")
+	if err != nil {
+		return nil, err
+	}
+	return stateFile.State, nil
 }
 
 // copied from github.com/hashicorp/terraform/command/show.go
