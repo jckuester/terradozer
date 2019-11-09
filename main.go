@@ -50,25 +50,31 @@ func main() {
 	}
 
 	for _, resAddr := range resInstances {
+		logrus.Debugf("absolute address for resource instance (addr=%s)", resAddr.String())
+
 		if resInstance := state.ResourceInstance(resAddr); resInstance.HasCurrent() {
 			resMode := resAddr.Resource.Resource.Mode
 			resID := resInstance.Current.AttrsFlat["id"]
 			resType := resAddr.Resource.Resource.Type
 
-			if resMode == addrs.ManagedResourceMode {
-				logrus.WithFields(map[string]interface{}{
-					"id": resID,
-				}).Print(resAddr.String())
+			logrus.Debugf("resource instance (mode=%s, type=%s, id=%s)", resMode, resType, resID)
 
-				resImported, tfDiagnostics := p.importResource(resType, resID)
-				if tfDiagnostics.HasErrors() {
-					logrus.WithError(tfDiagnostics.Err()).Infof("failed to import resource (type=%s, id=%s)", resType, resID)
-					continue
-				}
+			if resMode != addrs.ManagedResourceMode {
+				logrus.Debugf("can only delete managed resources defined by a resource block; therefore, ignoring this resource (type=%s, id=%s)", resType, resID)
+				continue
+			}
 
-				for _, r := range resImported {
-					logrus.Debugf("imported resource (type=%s, id=%s): %s", r.TypeName, resID, r.State.GoString())
-				}
+			resImported, tfDiagnostics := p.importResource(resType, resID)
+			if tfDiagnostics.HasErrors() {
+				logrus.WithError(tfDiagnostics.Err()).Infof("failed to import resource (type=%s, id=%s)", resType, resID)
+				continue
+			}
+
+			for _, r := range resImported {
+				logrus.Debugf("imported resource (type=%s, id=%s): %s", r.TypeName, resID, r.State.GoString())
+
+				// TODO
+				fmt.Printf("deleting resource (type=%s, id=%s)\n", r.TypeName, resID)
 			}
 		}
 	}
