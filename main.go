@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform/states/statefile"
 	"github.com/hashicorp/terraform/tfdiags"
 	"github.com/sirupsen/logrus"
+	"github.com/zclconf/go-cty/cty"
 )
 
 type TerraformProvider struct {
@@ -20,13 +21,22 @@ type TerraformProvider struct {
 }
 
 func main() {
+	profile := "tfsweeper"
+	region := "us-west-2"
+
 	logrus.SetFormatter(&logrus.TextFormatter{
 		DisableTimestamp: true,
 	})
+	logrus.SetLevel(logrus.DebugLevel)
 
-	_, err := loadAWSProvider()
+	p, err := loadAWSProvider()
 	if err != nil {
-		logrus.WithError(err).Fatal("failed to load AWS resource provider")
+		logrus.WithError(err).Fatal("failed to load Terraform AWS resource provider")
+	}
+
+	tfDiagnostics := p.configure(profile, region)
+	if tfDiagnostics.HasErrors() {
+		logrus.WithError(tfDiagnostics.Err()).Fatal("failed to configure Terraform provider")
 	}
 
 	state, err := getState()
@@ -43,11 +53,22 @@ func main() {
 		if resInstance := state.ResourceInstance(resAddr); resInstance.HasCurrent() {
 			resMode := resAddr.Resource.Resource.Mode
 			resID := resInstance.Current.AttrsFlat["id"]
+			resType := resAddr.Resource.Resource.Type
 
 			if resMode == addrs.ManagedResourceMode {
 				logrus.WithFields(map[string]interface{}{
 					"id": resID,
 				}).Print(resAddr.String())
+
+				resImported, tfDiagnostics := p.importResource(resType, resID)
+				if tfDiagnostics.HasErrors() {
+					logrus.WithError(tfDiagnostics.Err()).Infof("failed to import resource (type=%s, id=%s)", resType, resID)
+					continue
+				}
+
+				for _, r := range resImported {
+					logrus.Debugf("imported resource (type=%s, id=%s): %s", r.TypeName, resID, r.State.GoString())
+				}
 			}
 		}
 	}
@@ -96,6 +117,42 @@ func getState() (*states.State, error) {
 		return nil, err
 	}
 	return stateFile.State, nil
+}
+
+func (p TerraformProvider) configure(profile, region string) tfdiags.Diagnostics {
+	respConf := p.Configure(providers.ConfigureRequest{
+		TerraformVersion: "0.12.11",
+		Config: cty.ObjectVal(map[string]cty.Value{
+			"profile":                     cty.StringVal(profile),
+			"region":                      cty.StringVal(region),
+			"access_key":                  cty.UnknownVal(cty.DynamicPseudoType),
+			"allowed_account_ids":         cty.UnknownVal(cty.DynamicPseudoType),
+			"assume_role":                 cty.UnknownVal(cty.DynamicPseudoType),
+			"endpoints":                   cty.UnknownVal(cty.DynamicPseudoType),
+			"forbidden_account_ids":       cty.UnknownVal(cty.DynamicPseudoType),
+			"insecure":                    cty.UnknownVal(cty.DynamicPseudoType),
+			"max_retries":                 cty.UnknownVal(cty.DynamicPseudoType),
+			"s3_force_path_style":         cty.UnknownVal(cty.DynamicPseudoType),
+			"secret_key":                  cty.UnknownVal(cty.DynamicPseudoType),
+			"shared_credentials_file":     cty.UnknownVal(cty.DynamicPseudoType),
+			"skip_credentials_validation": cty.UnknownVal(cty.DynamicPseudoType),
+			"skip_get_ec2_platforms":      cty.UnknownVal(cty.DynamicPseudoType),
+			"skip_metadata_api_check":     cty.UnknownVal(cty.DynamicPseudoType),
+			"skip_region_validation":      cty.UnknownVal(cty.DynamicPseudoType),
+			"skip_requesting_account_id":  cty.UnknownVal(cty.DynamicPseudoType),
+			"token":                       cty.UnknownVal(cty.DynamicPseudoType),
+		})})
+
+	return respConf.Diagnostics
+}
+
+func (p TerraformProvider) importResource(resType string, resID string) ([]providers.ImportedResource, tfdiags.Diagnostics) {
+	respImport := p.ImportResourceState(providers.ImportResourceStateRequest{
+		TypeName: resType,
+		ID:       resID,
+	})
+
+	return respImport.ImportedResources, respImport.Diagnostics
 }
 
 // copied from github.com/hashicorp/terraform/command/show.go
