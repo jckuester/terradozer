@@ -21,7 +21,7 @@ type TerraformProvider struct {
 }
 
 func main() {
-	profile := "tfsweeper"
+	profile := "myaccount"
 	region := "us-west-2"
 
 	logrus.SetFormatter(&logrus.TextFormatter{
@@ -72,6 +72,18 @@ func main() {
 
 			for _, r := range resImported {
 				logrus.Debugf("imported resource (type=%s, id=%s): %s", r.TypeName, resID, r.State.GoString())
+
+				readResp := p.ReadResource(providers.ReadResourceRequest{
+					TypeName:   r.TypeName,
+					PriorState: r.State,
+					Private:    r.Private,
+				})
+				if readResp.Diagnostics.HasErrors() {
+					logrus.WithError(readResp.Diagnostics.Err()).Infof("failed to read resource")
+					continue
+				}
+
+				logrus.Debugf("read resource (type=%s, id=%s): %s", r.TypeName, resID, readResp.NewState.GoString())
 
 				// TODO
 				fmt.Printf("deleting resource (type=%s, id=%s)\n", r.TypeName, resID)
