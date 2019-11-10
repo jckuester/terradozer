@@ -64,29 +64,42 @@ func main() {
 				continue
 			}
 
-			resImported, tfDiagnostics := p.importResource(resType, resID)
+			importedResources, tfDiagnostics := p.importResource(resType, resID)
 			if tfDiagnostics.HasErrors() {
 				logrus.WithError(tfDiagnostics.Err()).Infof("failed to import resource (type=%s, id=%s)", resType, resID)
 				continue
 			}
 
-			for _, r := range resImported {
-				logrus.Debugf("imported resource (type=%s, id=%s): %s", r.TypeName, resID, r.State.GoString())
+			for _, resImp := range importedResources {
+				logrus.Debugf("imported resource (type=%s, id=%s): %s", resImp.TypeName, resID, resImp.State.GoString())
 
 				readResp := p.ReadResource(providers.ReadResourceRequest{
-					TypeName:   r.TypeName,
-					PriorState: r.State,
-					Private:    r.Private,
+					TypeName:   resImp.TypeName,
+					PriorState: resImp.State,
+					Private:    resImp.Private,
 				})
 				if readResp.Diagnostics.HasErrors() {
 					logrus.WithError(readResp.Diagnostics.Err()).Infof("failed to read resource")
 					continue
 				}
 
-				logrus.Debugf("read resource (type=%s, id=%s): %s", r.TypeName, resID, readResp.NewState.GoString())
+				logrus.Debugf("read resource (type=%s, id=%s): %s", resImp.TypeName, resID, readResp.NewState.GoString())
 
-				// TODO
-				fmt.Printf("deleting resource (type=%s, id=%s)\n", r.TypeName, resID)
+				respApply := p.ApplyResourceChange(providers.ApplyResourceChangeRequest{
+					TypeName:       resType,
+					PriorState:     readResp.NewState,
+					PlannedState:   cty.NullVal(cty.DynamicPseudoType),
+					Config:         cty.NullVal(cty.DynamicPseudoType),
+					PlannedPrivate: readResp.Private,
+				})
+
+				if respApply.Diagnostics.HasErrors() {
+					logrus.WithError(respApply.Diagnostics.Err()).Infof("failed to delete resource")
+					continue
+				}
+				logrus.Debugf("applied resource state: %s", respApply.NewState.GoString())
+
+				fmt.Printf("finished deleting resource (type=%s, id=%s)\n", resImp.TypeName, resID)
 			}
 		}
 	}
