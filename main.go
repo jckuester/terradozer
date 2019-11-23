@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
+	"log"
 	"os"
 	"sort"
 
@@ -28,6 +30,9 @@ func mainExitCode() int {
 	profile := "myaccount"
 	region := "us-west-2"
 	providerPath := "./terraform-provider-aws_v2.33.0_x4"
+
+	// discard TRACE logs of GRPCProvider
+	log.SetOutput(ioutil.Discard)
 
 	logrus.SetFormatter(&logrus.TextFormatter{
 		DisableTimestamp: true,
@@ -74,12 +79,12 @@ func mainExitCode() int {
 
 			importedResources, tfDiagnostics := p.importResource(resType, resID)
 			if tfDiagnostics.HasErrors() {
-				logrus.WithError(tfDiagnostics.Err()).Infof("failed to import resource (type=%s, id=%s); continuing...", resType, resID)
+				logrus.WithError(tfDiagnostics.Err()).Infof("failed to import resource (type=%s, id=%s); skipping resource", resType, resID)
 				continue
 			}
 
 			for _, resImp := range importedResources {
-				logrus.Debugf("imported resource (type=%s, id=%s): %s", resImp.TypeName, resID, resImp.State.GoString())
+				logrus.Debugf("imported resource (type=%s, id=%s): %s", resType, resID, resImp.State.GoString())
 
 				readResp := p.ReadResource(providers.ReadResourceRequest{
 					TypeName:   resImp.TypeName,
@@ -87,11 +92,11 @@ func mainExitCode() int {
 					Private:    resImp.Private,
 				})
 				if readResp.Diagnostics.HasErrors() {
-					logrus.WithError(readResp.Diagnostics.Err()).Infof("failed to read resource and refreshing its current state (type=%s, id=%s); continuing...", resType, resID)
+					logrus.WithError(readResp.Diagnostics.Err()).Infof("failed to read resource and refreshing its current state (type=%s, id=%s); skipping resource", resType, resID)
 					continue
 				}
 
-				logrus.Debugf("read resource (type=%s, id=%s): %s", resImp.TypeName, resID, readResp.NewState.GoString())
+				logrus.Debugf("read resource (type=%s, id=%s): %s", resType, resID, readResp.NewState.GoString())
 
 				respApply := p.ApplyResourceChange(providers.ApplyResourceChangeRequest{
 					TypeName:       resType,
@@ -102,7 +107,7 @@ func mainExitCode() int {
 				})
 
 				if respApply.Diagnostics.HasErrors() {
-					logrus.WithError(respApply.Diagnostics.Err()).Infof("failed to delete resource (type=%s, id=%s); continuing...", resType, resID)
+					logrus.WithError(respApply.Diagnostics.Err()).Infof("failed to delete resource (type=%s, id=%s); skipping resource", resType, resID)
 					continue
 				}
 				logrus.Debugf("new resource state after apply: %s", respApply.NewState.GoString())
