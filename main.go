@@ -98,6 +98,12 @@ func mainExitCode() int {
 
 				logrus.Debugf("read resource (type=%s, id=%s): %s", resType, resID, readResp.NewState.GoString())
 
+				resourceNotExists := readResp.NewState.IsNull()
+				if resourceNotExists {
+					logrus.Debugf("resource does not exist anymore (type=%s, id=%s); skipping resource", resImp.TypeName, resID)
+					continue
+				}
+
 				respApply := p.ApplyResourceChange(providers.ApplyResourceChangeRequest{
 					TypeName:       resType,
 					PriorState:     readResp.NewState,
