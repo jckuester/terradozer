@@ -21,6 +21,10 @@ type TerraformProvider struct {
 }
 
 func main() {
+	os.Exit(mainExitCode())
+}
+
+func mainExitCode() int {
 	profile := "myaccount"
 	region := "us-west-2"
 	providerPath := "./terraform-provider-aws_v2.33.0_x4"
@@ -32,7 +36,8 @@ func main() {
 
 	p, err := NewTerraformProvider(providerPath)
 	if err != nil {
-		logrus.WithError(err).Fatalf("failed to load Terraform provider: %s", providerPath)
+		logrus.WithError(err).Errorf("failed to load Terraform provider: %s", providerPath)
+		return 1
 	}
 
 	tfDiagnostics := p.configure(profile, region)
@@ -42,12 +47,14 @@ func main() {
 
 	state, err := getState()
 	if err != nil {
-		logrus.WithError(err).Fatal("failed to read tfstate from local file")
+		logrus.WithError(err).Errorf("failed to read Terraform state from local file")
+		return 1
 	}
 
 	resInstances, diagnostics := lookupAllResourceInstanceAddrs(state)
 	if diagnostics.HasErrors() {
-		logrus.WithError(diagnostics.Err()).Fatal("failed to lookup resource instance addresses")
+		logrus.WithError(diagnostics.Err()).Errorf("failed to lookup resource instance addresses")
+		return 1
 	}
 
 	for _, resAddr := range resInstances {
@@ -67,7 +74,7 @@ func main() {
 
 			importedResources, tfDiagnostics := p.importResource(resType, resID)
 			if tfDiagnostics.HasErrors() {
-				logrus.WithError(tfDiagnostics.Err()).Infof("failed to import resource (type=%s, id=%s)", resType, resID)
+				logrus.WithError(tfDiagnostics.Err()).Infof("failed to import resource (type=%s, id=%s); continuing...", resType, resID)
 				continue
 			}
 
@@ -80,7 +87,7 @@ func main() {
 					Private:    resImp.Private,
 				})
 				if readResp.Diagnostics.HasErrors() {
-					logrus.WithError(readResp.Diagnostics.Err()).Infof("failed to read resource")
+					logrus.WithError(readResp.Diagnostics.Err()).Infof("failed to read resource and refreshing its current state (type=%s, id=%s); continuing...", resType, resID)
 					continue
 				}
 
@@ -95,15 +102,17 @@ func main() {
 				})
 
 				if respApply.Diagnostics.HasErrors() {
-					logrus.WithError(respApply.Diagnostics.Err()).Infof("failed to delete resource")
+					logrus.WithError(respApply.Diagnostics.Err()).Infof("failed to delete resource (type=%s, id=%s); continuing...", resType, resID)
 					continue
 				}
-				logrus.Debugf("applied resource state: %s", respApply.NewState.GoString())
+				logrus.Debugf("new resource state after apply: %s", respApply.NewState.GoString())
 
 				fmt.Printf("finished deleting resource (type=%s, id=%s)\n", resImp.TypeName, resID)
 			}
 		}
 	}
+
+	return 0
 }
 
 func NewTerraformProvider(path string) (*TerraformProvider, error) {
