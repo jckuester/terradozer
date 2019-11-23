@@ -62,6 +62,8 @@ func mainExitCode() int {
 		return 1
 	}
 
+	deletedResourcesCount := 0
+
 	for _, resAddr := range resInstances {
 		logrus.Debugf("absolute address for resource instance (addr=%s)", resAddr.String())
 
@@ -119,9 +121,12 @@ func mainExitCode() int {
 				logrus.Debugf("new resource state after apply: %s", respApply.NewState.GoString())
 
 				fmt.Printf("finished deleting resource (type=%s, id=%s)\n", resImp.TypeName, resID)
+				deletedResourcesCount++
 			}
 		}
 	}
+
+	fmt.Printf("deleted %d resource(s)\n", deletedResourcesCount)
 
 	return 0
 }
