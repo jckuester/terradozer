@@ -23,15 +23,16 @@ type TerraformProvider struct {
 func main() {
 	profile := "myaccount"
 	region := "us-west-2"
+	providerPath := "./terraform-provider-aws_v2.33.0_x4"
 
 	logrus.SetFormatter(&logrus.TextFormatter{
 		DisableTimestamp: true,
 	})
 	logrus.SetLevel(logrus.DebugLevel)
 
-	p, err := loadAWSProvider()
+	p, err := NewTerraformProvider(providerPath)
 	if err != nil {
-		logrus.WithError(err).Fatal("failed to load Terraform AWS resource provider")
+		logrus.WithError(err).Fatalf("failed to load Terraform provider: %s", providerPath)
 	}
 
 	tfDiagnostics := p.configure(profile, region)
@@ -105,18 +106,16 @@ func main() {
 	}
 }
 
-func loadAWSProvider() (*TerraformProvider, error) {
-	awsProviderPluginData := discovery.PluginMeta{
-		Name:    "terraform-provider-aws",
-		Version: "v2.33.0",
-		Path:    "./terraform-provider-aws_v2.33.0_x4",
+func NewTerraformProvider(path string) (*TerraformProvider, error) {
+	m := discovery.PluginMeta{
+		Path: path,
 	}
 
-	awsProvider, err := providerFactory(awsProviderPluginData)()
+	p, err := providerFactory(m)()
 	if err != nil {
 		return nil, err
 	}
-	return &TerraformProvider{awsProvider}, nil
+	return &TerraformProvider{p}, nil
 }
 
 // copied from github.com/hashicorp/terraform/command/plugins.go
