@@ -8,19 +8,11 @@ import (
 	"sort"
 
 	"github.com/hashicorp/terraform/addrs"
-	"github.com/hashicorp/terraform/plugin"
-	"github.com/hashicorp/terraform/plugin/discovery"
-	"github.com/hashicorp/terraform/providers"
 	"github.com/hashicorp/terraform/states"
 	"github.com/hashicorp/terraform/states/statefile"
 	"github.com/hashicorp/terraform/tfdiags"
 	"github.com/sirupsen/logrus"
-	"github.com/zclconf/go-cty/cty"
 )
-
-type TerraformProvider struct {
-	providers.Interface
-}
 
 func main() {
 	os.Exit(mainExitCode())
@@ -45,7 +37,7 @@ func mainExitCode() int {
 		return 1
 	}
 
-	tfDiagnostics := p.configure(profile, region)
+	tfDiagnostics := p.Configure(profile, region)
 	if tfDiagnostics.HasErrors() {
 		logrus.WithError(tfDiagnostics.Err()).Fatal("failed to configure Terraform provider")
 	}
@@ -79,20 +71,16 @@ func mainExitCode() int {
 				continue
 			}
 
-			importedResources, tfDiagnostics := p.importResource(resType, resID)
-			if tfDiagnostics.HasErrors() {
-				logrus.WithError(tfDiagnostics.Err()).Infof("failed to import resource (type=%s, id=%s); skipping resource", resType, resID)
+			importResp := p.ImportResource(resType, resID)
+			if importResp.Diagnostics.HasErrors() {
+				logrus.WithError(importResp.Diagnostics.Err()).Infof("failed to import resource (type=%s, id=%s); skipping resource", resType, resID)
 				continue
 			}
 
-			for _, resImp := range importedResources {
+			for _, resImp := range importResp.ImportedResources {
 				logrus.Debugf("imported resource (type=%s, id=%s): %s", resType, resID, resImp.State.GoString())
 
-				readResp := p.ReadResource(providers.ReadResourceRequest{
-					TypeName:   resImp.TypeName,
-					PriorState: resImp.State,
-					Private:    resImp.Private,
-				})
+				readResp := p.ReadResource(resImp)
 				if readResp.Diagnostics.HasErrors() {
 					logrus.WithError(readResp.Diagnostics.Err()).Infof("failed to read resource and refreshing its current state (type=%s, id=%s); skipping resource", resType, resID)
 					continue
@@ -106,14 +94,7 @@ func mainExitCode() int {
 					continue
 				}
 
-				respApply := p.ApplyResourceChange(providers.ApplyResourceChangeRequest{
-					TypeName:       resType,
-					PriorState:     readResp.NewState,
-					PlannedState:   cty.NullVal(cty.DynamicPseudoType),
-					Config:         cty.NullVal(cty.DynamicPseudoType),
-					PlannedPrivate: readResp.Private,
-				})
-
+				respApply := p.ApplyResourceChange(resType, readResp)
 				if respApply.Diagnostics.HasErrors() {
 					logrus.WithError(respApply.Diagnostics.Err()).Infof("failed to delete resource (type=%s, id=%s); skipping resource", resType, resID)
 					continue
@@ -131,83 +112,12 @@ func mainExitCode() int {
 	return 0
 }
 
-func NewTerraformProvider(path string) (*TerraformProvider, error) {
-	m := discovery.PluginMeta{
-		Path: path,
-	}
-
-	p, err := providerFactory(m)()
-	if err != nil {
-		return nil, err
-	}
-	return &TerraformProvider{p}, nil
-}
-
-// copied from github.com/hashicorp/terraform/command/plugins.go
-func providerFactory(meta discovery.PluginMeta) providers.Factory {
-	return func() (providers.Interface, error) {
-		client := plugin.Client(meta)
-		// Request the RPC client so we can get the provider
-		// so we can build the actual RPC-implemented provider.
-		rpcClient, err := client.Client()
-		if err != nil {
-			return nil, err
-		}
-
-		raw, err := rpcClient.Dispense(plugin.ProviderPluginName)
-		if err != nil {
-			return nil, err
-		}
-
-		// store the client so that the plugin can kill the child process
-		p := raw.(*plugin.GRPCProvider)
-		p.PluginClient = client
-		return p, nil
-	}
-}
-
 func getState() (*states.State, error) {
 	stateFile, err := getStateFromPath("terraform.tfstate")
 	if err != nil {
 		return nil, err
 	}
 	return stateFile.State, nil
-}
-
-func (p TerraformProvider) configure(profile, region string) tfdiags.Diagnostics {
-	respConf := p.Configure(providers.ConfigureRequest{
-		TerraformVersion: "0.12.11",
-		Config: cty.ObjectVal(map[string]cty.Value{
-			"profile":                     cty.StringVal(profile),
-			"region":                      cty.StringVal(region),
-			"access_key":                  cty.UnknownVal(cty.DynamicPseudoType),
-			"allowed_account_ids":         cty.UnknownVal(cty.DynamicPseudoType),
-			"assume_role":                 cty.UnknownVal(cty.DynamicPseudoType),
-			"endpoints":                   cty.UnknownVal(cty.DynamicPseudoType),
-			"forbidden_account_ids":       cty.UnknownVal(cty.DynamicPseudoType),
-			"insecure":                    cty.UnknownVal(cty.DynamicPseudoType),
-			"max_retries":                 cty.UnknownVal(cty.DynamicPseudoType),
-			"s3_force_path_style":         cty.UnknownVal(cty.DynamicPseudoType),
-			"secret_key":                  cty.UnknownVal(cty.DynamicPseudoType),
-			"shared_credentials_file":     cty.UnknownVal(cty.DynamicPseudoType),
-			"skip_credentials_validation": cty.UnknownVal(cty.DynamicPseudoType),
-			"skip_get_ec2_platforms":      cty.UnknownVal(cty.DynamicPseudoType),
-			"skip_metadata_api_check":     cty.UnknownVal(cty.DynamicPseudoType),
-			"skip_region_validation":      cty.UnknownVal(cty.DynamicPseudoType),
-			"skip_requesting_account_id":  cty.UnknownVal(cty.DynamicPseudoType),
-			"token":                       cty.UnknownVal(cty.DynamicPseudoType),
-		})})
-
-	return respConf.Diagnostics
-}
-
-func (p TerraformProvider) importResource(resType string, resID string) ([]providers.ImportedResource, tfdiags.Diagnostics) {
-	respImport := p.ImportResourceState(providers.ImportResourceStateRequest{
-		TypeName: resType,
-		ID:       resID,
-	})
-
-	return respImport.ImportedResources, respImport.Diagnostics
 }
 
 // copied from github.com/hashicorp/terraform/command/show.go
