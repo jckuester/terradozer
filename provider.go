@@ -1,15 +1,27 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/hashicorp/terraform/plugin"
 	"github.com/hashicorp/terraform/plugin/discovery"
 	"github.com/hashicorp/terraform/providers"
 	"github.com/hashicorp/terraform/tfdiags"
+	"github.com/sirupsen/logrus"
 	"github.com/zclconf/go-cty/cty"
 )
 
+type Provider interface {
+	Configure(providers.ConfigureRequest) providers.ConfigureResponse
+	ReadResource(providers.ReadResourceRequest) providers.ReadResourceResponse
+	PlanResourceChange(providers.PlanResourceChangeRequest) providers.PlanResourceChangeResponse
+	ApplyResourceChange(providers.ApplyResourceChangeRequest) providers.ApplyResourceChangeResponse
+	ImportResourceState(providers.ImportResourceStateRequest) providers.ImportResourceStateResponse
+	ReadDataSource(providers.ReadDataSourceRequest) providers.ReadDataSourceResponse
+}
+
 type TerraformProvider struct {
-	providers.Interface
+	provider Provider
 }
 
 func NewTerraformProvider(path string) (*TerraformProvider, error) {
@@ -48,7 +60,7 @@ func providerFactory(meta discovery.PluginMeta) providers.Factory {
 }
 
 func (p TerraformProvider) Configure(profile, region string) tfdiags.Diagnostics {
-	respConf := p.Interface.Configure(providers.ConfigureRequest{
+	respConf := p.provider.Configure(providers.ConfigureRequest{
 		TerraformVersion: "0.12.11",
 		Config: cty.ObjectVal(map[string]cty.Value{
 			"profile":                     cty.StringVal(profile),
@@ -75,7 +87,7 @@ func (p TerraformProvider) Configure(profile, region string) tfdiags.Diagnostics
 }
 
 func (p TerraformProvider) ImportResource(resType string, resID string) providers.ImportResourceStateResponse {
-	response := p.ImportResourceState(providers.ImportResourceStateRequest{
+	response := p.provider.ImportResourceState(providers.ImportResourceStateRequest{
 		TypeName: resType,
 		ID:       resID,
 	})
@@ -83,7 +95,7 @@ func (p TerraformProvider) ImportResource(resType string, resID string) provider
 }
 
 func (p TerraformProvider) ReadResource(r providers.ImportedResource) providers.ReadResourceResponse {
-	response := p.Interface.ReadResource(providers.ReadResourceRequest{
+	response := p.provider.ReadResource(providers.ReadResourceRequest{
 		TypeName:   r.TypeName,
 		PriorState: r.State,
 		Private:    r.Private,
@@ -91,10 +103,31 @@ func (p TerraformProvider) ReadResource(r providers.ImportedResource) providers.
 	return response
 }
 
-func (p TerraformProvider) ApplyResourceChange(resType string,
+func (p TerraformProvider) DeleteResource(resType string, resID string,
+	readResp providers.ReadResourceResponse, dryRun bool) bool {
+
+	if dryRun {
+		fmt.Printf("would try to delete resource (type=%s, id=%s)\n", resType, resID)
+		return true
+	}
+
+	respApply := p.applyResourceChange(resType, readResp)
+	if respApply.Diagnostics.HasErrors() {
+		logrus.WithError(respApply.Diagnostics.Err()).Infof(
+			"failed to delete resource (type=%s, id=%s); skipping resource", resType, resID)
+		return false
+	}
+	logrus.Debugf("new resource state after apply: %s", respApply.NewState.GoString())
+
+	fmt.Printf("finished deleting resource (type=%s, id=%s)\n", resType, resID)
+
+	return true
+}
+
+func (p TerraformProvider) applyResourceChange(resType string,
 	readResp providers.ReadResourceResponse) providers.ApplyResourceChangeResponse {
 
-	response := p.Interface.ApplyResourceChange(providers.ApplyResourceChangeRequest{
+	response := p.provider.ApplyResourceChange(providers.ApplyResourceChangeRequest{
 		TypeName:       resType,
 		PriorState:     readResp.NewState,
 		PlannedState:   cty.NullVal(cty.DynamicPseudoType),

@@ -1,6 +1,9 @@
 package main
 
+//go:generate mockgen -source=provider.go -destination=provider_mock_test.go -package=main
+
 import (
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -13,6 +16,15 @@ import (
 	"github.com/hashicorp/terraform/tfdiags"
 	"github.com/sirupsen/logrus"
 )
+
+var (
+	dryRun bool
+)
+
+func init() {
+	flag.BoolVar(&dryRun, "dry-run", false, "Don't delete anything, just show what would happen")
+	flag.Parse()
+}
 
 func main() {
 	os.Exit(mainExitCode())
@@ -94,20 +106,14 @@ func mainExitCode() int {
 					continue
 				}
 
-				respApply := p.ApplyResourceChange(resType, readResp)
-				if respApply.Diagnostics.HasErrors() {
-					logrus.WithError(respApply.Diagnostics.Err()).Infof("failed to delete resource (type=%s, id=%s); skipping resource", resType, resID)
-					continue
+				if p.DeleteResource(resType, resID, readResp, dryRun) {
+					deletedResourcesCount++
 				}
-				logrus.Debugf("new resource state after apply: %s", respApply.NewState.GoString())
-
-				fmt.Printf("finished deleting resource (type=%s, id=%s)\n", resImp.TypeName, resID)
-				deletedResourcesCount++
 			}
 		}
 	}
 
-	fmt.Printf("deleted %d resource(s)\n", deletedResourcesCount)
+	fmt.Printf("total resources: %d\n", deletedResourcesCount)
 
 	return 0
 }
