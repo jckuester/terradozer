@@ -1,8 +1,12 @@
 package main
 
 import (
-	"fmt"
+	"os"
+	"os/exec"
 
+	"github.com/hashicorp/go-hclog"
+
+	goPlugin "github.com/hashicorp/go-plugin"
 	"github.com/hashicorp/terraform/plugin"
 	"github.com/hashicorp/terraform/plugin/discovery"
 	"github.com/hashicorp/terraform/providers"
@@ -24,22 +28,27 @@ type TerraformProvider struct {
 	provider Provider
 }
 
-func NewTerraformProvider(path string) (*TerraformProvider, error) {
+func NewTerraformProvider(path string, logDebug bool) (*TerraformProvider, error) {
 	m := discovery.PluginMeta{
 		Path: path,
 	}
 
-	p, err := providerFactory(m)()
+	hcLoglevel := hclog.Error
+	if logDebug {
+		hcLoglevel = hclog.Debug
+	}
+
+	p, err := providerFactory(m, hcLoglevel)()
 	if err != nil {
 		return nil, err
 	}
 	return &TerraformProvider{p}, nil
 }
 
-// copied from github.com/hashicorp/terraform/command/plugins.go
-func providerFactory(meta discovery.PluginMeta) providers.Factory {
+// copied (and modified) from github.com/hashicorp/terraform/command/plugins.go
+func providerFactory(meta discovery.PluginMeta, loglevel hclog.Level) providers.Factory {
 	return func() (providers.Interface, error) {
-		client := plugin.Client(meta)
+		client := goPlugin.NewClient(clientConfig(meta, loglevel))
 		// Request the RPC client so we can get the provider
 		// so we can build the actual RPC-implemented provider.
 		rpcClient, err := client.Client()
@@ -56,6 +65,25 @@ func providerFactory(meta discovery.PluginMeta) providers.Factory {
 		p := raw.(*plugin.GRPCProvider)
 		p.PluginClient = client
 		return p, nil
+	}
+}
+
+// copied (and modified) from terraform/plugin/client.go
+func clientConfig(m discovery.PluginMeta, loglevel hclog.Level) *goPlugin.ClientConfig {
+	logger := hclog.New(&hclog.LoggerOptions{
+		Name:   "plugin",
+		Level:  loglevel,
+		Output: os.Stderr,
+	})
+
+	return &goPlugin.ClientConfig{
+		Cmd:              exec.Command(m.Path),
+		HandshakeConfig:  plugin.Handshake,
+		VersionedPlugins: plugin.VersionedPlugins,
+		Managed:          true,
+		Logger:           logger,
+		AllowedProtocols: []goPlugin.Protocol{goPlugin.ProtocolGRPC},
+		AutoMTLS:         true,
 	}
 }
 
@@ -107,7 +135,7 @@ func (p TerraformProvider) DeleteResource(resType string, resID string,
 	readResp providers.ReadResourceResponse, dryRun bool) bool {
 
 	if dryRun {
-		fmt.Printf("would try to delete resource (type=%s, id=%s)\n", resType, resID)
+		logrus.Printf("would try to delete resource (type=%s, id=%s)\n", resType, resID)
 		return true
 	}
 
@@ -119,7 +147,7 @@ func (p TerraformProvider) DeleteResource(resType string, resID string,
 	}
 	logrus.Debugf("new resource state after apply: %s", respApply.NewState.GoString())
 
-	fmt.Printf("finished deleting resource (type=%s, id=%s)\n", resType, resID)
+	logrus.Printf("finished deleting resource (type=%s, id=%s)\n", resType, resID)
 
 	return true
 }

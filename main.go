@@ -18,11 +18,13 @@ import (
 )
 
 var (
-	dryRun bool
+	dryRun   bool
+	logDebug bool
 )
 
 func init() {
 	flag.BoolVar(&dryRun, "dry-run", false, "Don't delete anything, just show what would happen")
+	flag.BoolVar(&logDebug, "log-debug", false, "Enable debug logging")
 	flag.Parse()
 }
 
@@ -41,9 +43,12 @@ func mainExitCode() int {
 	logrus.SetFormatter(&logrus.TextFormatter{
 		DisableTimestamp: true,
 	})
-	logrus.SetLevel(logrus.DebugLevel)
 
-	p, err := NewTerraformProvider(providerPath)
+	if logDebug {
+		logrus.SetLevel(logrus.DebugLevel)
+	}
+
+	p, err := NewTerraformProvider(providerPath, logDebug)
 	if err != nil {
 		logrus.WithError(err).Errorf("failed to load Terraform provider: %s", providerPath)
 		return 1
@@ -79,13 +84,13 @@ func mainExitCode() int {
 			logrus.Debugf("resource instance (mode=%s, type=%s, id=%s)", resMode, resType, resID)
 
 			if resMode != addrs.ManagedResourceMode {
-				logrus.Debugf("can only delete managed resources defined by a resource block; therefore, ignoring this resource (type=%s, id=%s)", resType, resID)
+				logrus.Infof("can only delete managed resources defined by a resource block; therefore skipping resource (type=%s, id=%s)", resType, resID)
 				continue
 			}
 
 			importResp := p.ImportResource(resType, resID)
 			if importResp.Diagnostics.HasErrors() {
-				logrus.WithError(importResp.Diagnostics.Err()).Infof("failed to import resource (type=%s, id=%s); skipping resource", resType, resID)
+				logrus.WithError(importResp.Diagnostics.Err()).Infof("failed to import resource; therefore skipping resource (type=%s, id=%s)", resType, resID)
 				continue
 			}
 
@@ -94,7 +99,7 @@ func mainExitCode() int {
 
 				readResp := p.ReadResource(resImp)
 				if readResp.Diagnostics.HasErrors() {
-					logrus.WithError(readResp.Diagnostics.Err()).Infof("failed to read resource and refreshing its current state (type=%s, id=%s); skipping resource", resType, resID)
+					logrus.WithError(readResp.Diagnostics.Err()).Infof("failed to read resource and refreshing its current state; therefore skipping resource (type=%s, id=%s)", resType, resID)
 					continue
 				}
 
@@ -102,7 +107,7 @@ func mainExitCode() int {
 
 				resourceNotExists := readResp.NewState.IsNull()
 				if resourceNotExists {
-					logrus.Debugf("resource does not exist anymore (type=%s, id=%s); skipping resource", resImp.TypeName, resID)
+					logrus.Infof("resource found in state does not exist anymore (type=%s, id=%s)", resImp.TypeName, resID)
 					continue
 				}
 
@@ -113,7 +118,7 @@ func mainExitCode() int {
 		}
 	}
 
-	fmt.Printf("total resources: %d\n", deletedResourcesCount)
+	logrus.Infof("total resources deleted: %d\n", deletedResourcesCount)
 
 	return 0
 }
