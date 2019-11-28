@@ -18,13 +18,15 @@ import (
 )
 
 var (
-	dryRun   bool
-	logDebug bool
+	dryRun      bool
+	logDebug    bool
+	pathToState string
 )
 
 func init() {
-	flag.BoolVar(&dryRun, "dry-run", false, "Don't delete anything, just show what would happen")
-	flag.BoolVar(&logDebug, "log-debug", false, "Enable debug logging")
+	flag.BoolVar(&dryRun, "dry", false, "Don't delete anything")
+	flag.BoolVar(&logDebug, "debug", false, "Enable debug logging")
+	flag.StringVar(&pathToState, "state", "terraform.tfstate", "Path to a Terraform state file")
 	flag.Parse()
 }
 
@@ -59,9 +61,9 @@ func mainExitCode() int {
 		logrus.WithError(tfDiagnostics.Err()).Fatal("failed to configure Terraform provider")
 	}
 
-	state, err := getState()
+	state, err := getState(pathToState)
 	if err != nil {
-		logrus.WithError(err).Errorf("failed to read Terraform state from local file")
+		logrus.WithError(err).Errorf("failed to get Terraform state")
 		return 1
 	}
 
@@ -118,13 +120,13 @@ func mainExitCode() int {
 		}
 	}
 
-	logrus.Infof("total resources deleted: %d\n", deletedResourcesCount)
+	logrus.Infof("total number of resources deleted: %d\n", deletedResourcesCount)
 
 	return 0
 }
 
-func getState() (*states.State, error) {
-	stateFile, err := getStateFromPath("terraform.tfstate")
+func getState(path string) (*states.State, error) {
+	stateFile, err := getStateFromPath(path)
 	if err != nil {
 		return nil, err
 	}
