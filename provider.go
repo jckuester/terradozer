@@ -87,29 +87,10 @@ func clientConfig(m discovery.PluginMeta, loglevel hclog.Level) *goPlugin.Client
 	}
 }
 
-func (p TerraformProvider) Configure(profile, region string) tfdiags.Diagnostics {
+func (p TerraformProvider) Configure(config cty.Value) tfdiags.Diagnostics {
 	respConf := p.provider.Configure(providers.ConfigureRequest{
-		TerraformVersion: "0.12.11",
-		Config: cty.ObjectVal(map[string]cty.Value{
-			"profile":                     cty.StringVal(profile),
-			"region":                      cty.StringVal(region),
-			"access_key":                  cty.UnknownVal(cty.DynamicPseudoType),
-			"allowed_account_ids":         cty.UnknownVal(cty.DynamicPseudoType),
-			"assume_role":                 cty.UnknownVal(cty.DynamicPseudoType),
-			"endpoints":                   cty.UnknownVal(cty.DynamicPseudoType),
-			"forbidden_account_ids":       cty.UnknownVal(cty.DynamicPseudoType),
-			"insecure":                    cty.UnknownVal(cty.DynamicPseudoType),
-			"max_retries":                 cty.UnknownVal(cty.DynamicPseudoType),
-			"s3_force_path_style":         cty.UnknownVal(cty.DynamicPseudoType),
-			"secret_key":                  cty.UnknownVal(cty.DynamicPseudoType),
-			"shared_credentials_file":     cty.UnknownVal(cty.DynamicPseudoType),
-			"skip_credentials_validation": cty.UnknownVal(cty.DynamicPseudoType),
-			"skip_get_ec2_platforms":      cty.UnknownVal(cty.DynamicPseudoType),
-			"skip_metadata_api_check":     cty.UnknownVal(cty.DynamicPseudoType),
-			"skip_region_validation":      cty.UnknownVal(cty.DynamicPseudoType),
-			"skip_requesting_account_id":  cty.UnknownVal(cty.DynamicPseudoType),
-			"token":                       cty.UnknownVal(cty.DynamicPseudoType),
-		})})
+		Config: config,
+	})
 
 	return respConf.Diagnostics
 }

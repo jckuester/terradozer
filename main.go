@@ -35,8 +35,6 @@ func main() {
 }
 
 func mainExitCode() int {
-	profile := "myaccount"
-	region := "us-west-2"
 	providerPath := "./terraform-provider-aws_v2.33.0_x4"
 
 	// discard TRACE logs of GRPCProvider
@@ -56,7 +54,7 @@ func mainExitCode() int {
 		return 1
 	}
 
-	tfDiagnostics := p.Configure(profile, region)
+	tfDiagnostics := p.Configure(awsProviderConfig())
 	if tfDiagnostics.HasErrors() {
 		logrus.WithError(tfDiagnostics.Err()).Fatal("failed to configure Terraform provider")
 	}
