@@ -38,6 +38,10 @@ func InitEnv(t *testing.T) EnvVars {
 }
 
 func TestAcc_SingleResource(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping acceptance test.")
+	}
+
 	env := InitEnv(t)
 
 	terraformDir := "./test-fixtures/single-resource"

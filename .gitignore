@@ -1,0 +1,5 @@
+*_mock_test.go
+.terradozer/
+.terraform/
+*.tfstate
+*.backup
