@@ -4,16 +4,11 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
-	"sort"
 
 	"github.com/hashicorp/terraform/addrs"
-	"github.com/hashicorp/terraform/states"
-	"github.com/hashicorp/terraform/states/statefile"
-	"github.com/hashicorp/terraform/tfdiags"
 	"github.com/sirupsen/logrus"
 )
 
@@ -27,7 +22,6 @@ func init() {
 	flag.BoolVar(&dryRun, "dry", false, "Don't delete anything")
 	flag.BoolVar(&logDebug, "debug", false, "Enable debug logging")
 	flag.StringVar(&pathToState, "state", "terraform.tfstate", "Path to a Terraform state file")
-	flag.Parse()
 }
 
 func main() {
@@ -35,7 +29,19 @@ func main() {
 }
 
 func mainExitCode() int {
-	providerPath := "./terraform-provider-aws_v2.33.0_x4"
+	flag.Parse()
+
+	provider := "aws"
+
+	metaPlugin, tfDiagnostics, err := InstallProvider(provider, "2.43.0")
+	if tfDiagnostics.HasErrors() {
+		logrus.WithError(tfDiagnostics.Err()).Errorf("failed to install Terraform provider: %s", provider)
+		return 1
+	}
+	if err != nil {
+		logrus.WithError(err).Errorf("failed to install Terraform provider: %s", provider)
+		return 1
+	}
 
 	// discard TRACE logs of GRPCProvider
 	log.SetOutput(ioutil.Discard)
@@ -48,13 +54,13 @@ func mainExitCode() int {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
-	p, err := NewTerraformProvider(providerPath, logDebug)
+	p, err := NewTerraformProvider(metaPlugin.Path, logDebug)
 	if err != nil {
-		logrus.WithError(err).Errorf("failed to load Terraform provider: %s", providerPath)
+		logrus.WithError(err).Errorf("failed to load Terraform provider: %s", metaPlugin.Path)
 		return 1
 	}
 
-	tfDiagnostics := p.Configure(awsProviderConfig())
+	tfDiagnostics = p.Configure(awsProviderConfig())
 	if tfDiagnostics.HasErrors() {
 		logrus.WithError(tfDiagnostics.Err()).Fatal("failed to configure Terraform provider")
 	}

@@ -1,16 +1,19 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 
 	"github.com/hashicorp/go-hclog"
-
 	goPlugin "github.com/hashicorp/go-plugin"
+	"github.com/hashicorp/go-version"
+	"github.com/hashicorp/terraform/addrs"
 	"github.com/hashicorp/terraform/plugin"
 	"github.com/hashicorp/terraform/plugin/discovery"
 	"github.com/hashicorp/terraform/providers"
 	"github.com/hashicorp/terraform/tfdiags"
+	"github.com/mitchellh/cli"
 	"github.com/sirupsen/logrus"
 	"github.com/zclconf/go-cty/cty"
 )
@@ -144,4 +147,26 @@ func (p TerraformProvider) applyResourceChange(resType string,
 		PlannedPrivate: readResp.Private,
 	})
 	return response
+}
+
+func InstallProvider(providerName, constraint string) (discovery.PluginMeta, tfdiags.Diagnostics, error) {
+	installDir := ".terradozer"
+	providerInstaller := &discovery.ProviderInstaller{
+		Dir:                   installDir,
+		Cache:                 discovery.NewLocalPluginCache(installDir + "/cache"),
+		PluginProtocolVersion: discovery.PluginInstallProtocolVersion,
+		SkipVerify:            false,
+		Ui: &cli.BasicUi{
+			Reader:      os.Stdin,
+			Writer:      os.Stdout,
+			ErrorWriter: os.Stderr,
+		},
+	}
+
+	constraints, err := version.NewConstraint(constraint)
+	if err != nil {
+		return discovery.PluginMeta{}, nil, fmt.Errorf("failed to parse provider version constraint: %s", err)
+	}
+	pty := addrs.ProviderType{Name: providerName}
+	return providerInstaller.Get(pty, discovery.NewConstraints(constraints))
 }
