@@ -149,11 +149,17 @@ func (p TerraformProvider) applyResourceChange(resType string,
 	return response
 }
 
-func InstallProvider(providerName, constraint string) (discovery.PluginMeta, tfdiags.Diagnostics, error) {
+func InstallProvider(providerName, constraint string, useCache bool) (discovery.PluginMeta, tfdiags.Diagnostics, error) {
 	installDir := ".terradozer"
+
 	providerInstaller := &discovery.ProviderInstaller{
-		Dir:                   installDir,
-		Cache:                 discovery.NewLocalPluginCache(installDir + "/cache"),
+		Dir: installDir,
+		Cache: func() discovery.PluginCache {
+			if useCache {
+				return discovery.NewLocalPluginCache(installDir + "/cache")
+			}
+			return nil
+		}(),
 		PluginProtocolVersion: discovery.PluginInstallProtocolVersion,
 		SkipVerify:            false,
 		Ui: &cli.BasicUi{
