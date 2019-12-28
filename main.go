@@ -34,18 +34,6 @@ func main() {
 func mainExitCode() int {
 	flag.Parse()
 
-	provider := "aws"
-
-	metaPlugin, tfDiagnostics, err := InstallProvider(provider, "2.43.0")
-	if tfDiagnostics.HasErrors() {
-		logrus.WithError(tfDiagnostics.Err()).Errorf("failed to install Terraform provider: %s", provider)
-		return 1
-	}
-	if err != nil {
-		logrus.WithError(err).Errorf("failed to install Terraform provider: %s", provider)
-		return 1
-	}
-
 	// discard TRACE logs of GRPCProvider
 	log.SetOutput(ioutil.Discard)
 
@@ -57,23 +45,18 @@ func mainExitCode() int {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
-	p, err := NewTerraformProvider(metaPlugin.Path, logDebug)
-	if err != nil {
-		logrus.WithError(err).Errorf("failed to load Terraform provider: %s", metaPlugin.Path)
-		return 1
-	}
-
-	tfDiagnostics = p.Configure(awsProviderConfig())
-	if tfDiagnostics.HasErrors() {
-		logrus.WithError(tfDiagnostics.Err()).Fatal("failed to configure Terraform provider")
-	}
-
 	state, err := getState(pathToState)
 	if err != nil {
-		logrus.WithError(err).Errorf("failed to get Terraform state")
+		logrus.WithError(err).Error("failed to get Terraform state")
 		return 1
 	}
 	logrus.Infof("using state: %s", pathToState)
+
+	providers, err := InitProviders(state.ProviderAddrs())
+	if err != nil {
+		logrus.WithError(err).Error("failed to initialize all needed Terraform providers to delete resources in state")
+		return 1
+	}
 
 	resInstances, diagnostics := lookupAllResourceInstanceAddrs(state)
 	if diagnostics.HasErrors() {
@@ -86,49 +69,55 @@ func mainExitCode() int {
 	for _, resAddr := range resInstances {
 		logrus.Debugf("absolute address for resource instance (addr=%s)", resAddr.String())
 
-		if resInstance := state.ResourceInstance(resAddr); resInstance.HasCurrent() {
-			resMode := resAddr.Resource.Resource.Mode
-			resType := resAddr.Resource.Resource.Type
+		resInstance := state.ResourceInstance(resAddr)
+		pName := resAddr.Resource.Resource.DefaultProviderConfig().StringCompact()
+		p, ok := providers[pName]
+		if !ok {
+			// this error should not happen
+			logrus.Errorf("failed to find provider in provider list: %s", pName)
+		}
 
-			resID, err := getResourceID(resInstance)
-			if err != nil {
-				logrus.WithError(err).Errorf("failed to get ID for resource (addr=%s)", resAddr.String())
-				return 1
-			}
+		resMode := resAddr.ContainingResource().Resource.Mode
+		resType := resAddr.Resource.Resource.Type
 
-			logrus.Debugf("resource instance (mode=%s, type=%s, id=%s)", resMode, resType, resID)
+		resID, err := getResourceID(resInstance)
+		if err != nil {
+			logrus.WithError(err).Errorf("failed to get ID for resource (addr=%s)", resAddr.String())
+			return 1
+		}
 
-			if resMode != addrs.ManagedResourceMode {
-				logrus.Infof("can only delete managed resources defined by a resource block; therefore skipping resource (type=%s, id=%s)", resType, resID)
+		logrus.Debugf("resource instance (mode=%s, type=%s, id=%s)", resMode, resType, resID)
+
+		if resMode != addrs.ManagedResourceMode {
+			logrus.Infof("can only delete managed resources defined by a resource block; therefore skipping resource (type=%s, id=%s)", resType, resID)
+			continue
+		}
+
+		importResp := p.ImportResource(resType, resID)
+		if importResp.Diagnostics.HasErrors() {
+			logrus.WithError(importResp.Diagnostics.Err()).Infof("failed to import resource; therefore skipping resource (type=%s, id=%s)", resType, resID)
+			continue
+		}
+
+		for _, resImp := range importResp.ImportedResources {
+			logrus.Debugf("imported resource (type=%s, id=%s): %s", resType, resID, resImp.State.GoString())
+
+			readResp := p.ReadResource(resImp)
+			if readResp.Diagnostics.HasErrors() {
+				logrus.WithError(readResp.Diagnostics.Err()).Infof("failed to read resource and refreshing its current state; therefore skipping resource (type=%s, id=%s)", resType, resID)
 				continue
 			}
 
-			importResp := p.ImportResource(resType, resID)
-			if importResp.Diagnostics.HasErrors() {
-				logrus.WithError(importResp.Diagnostics.Err()).Infof("failed to import resource; therefore skipping resource (type=%s, id=%s)", resType, resID)
+			logrus.Debugf("read resource (type=%s, id=%s): %s", resType, resID, readResp.NewState.GoString())
+
+			resourceNotExists := readResp.NewState.IsNull()
+			if resourceNotExists {
+				logrus.Infof("resource found in state does not exist anymore (type=%s, id=%s)", resImp.TypeName, resID)
 				continue
 			}
 
-			for _, resImp := range importResp.ImportedResources {
-				logrus.Debugf("imported resource (type=%s, id=%s): %s", resType, resID, resImp.State.GoString())
-
-				readResp := p.ReadResource(resImp)
-				if readResp.Diagnostics.HasErrors() {
-					logrus.WithError(readResp.Diagnostics.Err()).Infof("failed to read resource and refreshing its current state; therefore skipping resource (type=%s, id=%s)", resType, resID)
-					continue
-				}
-
-				logrus.Debugf("read resource (type=%s, id=%s): %s", resType, resID, readResp.NewState.GoString())
-
-				resourceNotExists := readResp.NewState.IsNull()
-				if resourceNotExists {
-					logrus.Infof("resource found in state does not exist anymore (type=%s, id=%s)", resImp.TypeName, resID)
-					continue
-				}
-
-				if p.DeleteResource(resType, resID, readResp, dryRun) {
-					deletedResourcesCount++
-				}
+			if p.DeleteResource(resType, resID, readResp, dryRun) {
+				deletedResourcesCount++
 			}
 		}
 	}

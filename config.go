@@ -1,11 +1,25 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/zclconf/go-cty/cty"
 )
 
+// ProviderConfig returns the provider config by name (e.g. aws)
+func ProviderConfig(name string) (cty.Value, string, error) {
+	switch name {
+	case "aws":
+		return awsProviderConfig(), "2.43.0", nil
+	case "random":
+		return cty.EmptyObjectVal, "", nil
+	default:
+		return cty.NilVal, "", fmt.Errorf("provider config not found; provider might not yet be supported: %s", name)
+	}
+}
+
+// awsProviderConfig returns a config for the Terraform AWS Provider
 func awsProviderConfig() cty.Value {
 	return cty.ObjectVal(map[string]cty.Value{
 		"profile":                     cty.StringVal(os.Getenv("AWS_PROFILE")),

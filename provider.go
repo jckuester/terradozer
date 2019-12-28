@@ -31,7 +31,7 @@ type TerraformProvider struct {
 	provider Provider
 }
 
-func NewTerraformProvider(path string, logDebug bool) (*TerraformProvider, error) {
+func newTerraformProvider(path string, logDebug bool) (*TerraformProvider, error) {
 	m := discovery.PluginMeta{
 		Path: path,
 	}
@@ -131,7 +131,7 @@ func (p TerraformProvider) DeleteResource(resType string, resID string,
 	}
 	logrus.Debugf("new resource state after apply: %s", respApply.NewState.GoString())
 
-	logrus.Printf("finished deleting resource (type=%s, id=%s)\n", resType, resID)
+	logrus.Printf("deleted resource (type=%s, id=%s)\n", resType, resID)
 
 	return true
 }
@@ -149,7 +149,7 @@ func (p TerraformProvider) applyResourceChange(resType string,
 	return response
 }
 
-func InstallProvider(providerName, constraint string, useCache bool) (discovery.PluginMeta, tfdiags.Diagnostics, error) {
+func InstallProvider(providerName, constraint string, useCache bool) (discovery.PluginMeta, error) {
 	installDir := ".terradozer"
 
 	providerInstaller := &discovery.ProviderInstaller{
@@ -169,10 +169,58 @@ func InstallProvider(providerName, constraint string, useCache bool) (discovery.
 		},
 	}
 
-	constraints, err := version.NewConstraint(constraint)
-	if err != nil {
-		return discovery.PluginMeta{}, nil, fmt.Errorf("failed to parse provider version constraint: %s", err)
+	providerConstraint := discovery.AllVersions
+
+	if constraint != "" {
+		constraints, err := version.NewConstraint(constraint)
+		if err != nil {
+			return discovery.PluginMeta{}, fmt.Errorf("failed to parse provider version constraint: %s", err)
+		}
+		providerConstraint = discovery.NewConstraints(constraints)
 	}
+
 	pty := addrs.ProviderType{Name: providerName}
-	return providerInstaller.Get(pty, discovery.NewConstraints(constraints))
+	meta, tfdiagnostics, err := providerInstaller.Get(pty, providerConstraint)
+	if err != nil {
+		tfdiagnostics = tfdiagnostics.Append(err)
+		return discovery.PluginMeta{}, tfdiagnostics.Err()
+	}
+
+	return meta, nil
+}
+
+// InitProviders installs and initializes, and configures each provider in the given provider address list
+func InitProviders(providerAddrs []addrs.AbsProviderConfig) (map[string]*TerraformProvider, error) {
+	providers := map[string]*TerraformProvider{}
+
+	for _, pAddr := range providerAddrs {
+		pName := pAddr.ProviderConfig.StringCompact()
+		logrus.Debugf("provider name: %s", pName)
+
+		pConfig, pVersion, err := ProviderConfig(pName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get provider config: %s", err)
+		}
+
+		metaPlugin, err := InstallProvider(pName, pVersion, true)
+		if err != nil {
+			return nil, fmt.Errorf("failed to install provider (%s): %s", pName, err)
+		}
+		logrus.Infof("installed provider (name=%s, version=%s)", metaPlugin.Name, metaPlugin.Version)
+
+		p, err := newTerraformProvider(metaPlugin.Path, logDebug)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load Terraform provider (%s): %s", metaPlugin.Path, err)
+		}
+
+		tfDiagnostics := p.Configure(pConfig)
+		if tfDiagnostics.HasErrors() {
+			return nil, fmt.Errorf("failed to configure provider (name=%s, version=%s): %s", metaPlugin.Name, metaPlugin.Version, tfDiagnostics.Err())
+		}
+		logrus.Infof("configured provider (name=%s, version=%s)", metaPlugin.Name, metaPlugin.Version)
+
+		providers[pName] = p
+	}
+
+	return providers, nil
 }
