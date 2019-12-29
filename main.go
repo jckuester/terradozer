@@ -130,14 +130,26 @@ func mainExitCode() int {
 func getResourceID(resInstance *states.ResourceInstance) (string, error) {
 	var result ResourceID
 
-	err := json.Unmarshal(resInstance.Current.AttrsJSON, &result)
-	if err != nil {
-		return "", fmt.Errorf("failed to unmarshal JSON-encoded resource instance attributes: %s", err)
+	if !resInstance.HasCurrent() {
+		return "", fmt.Errorf("resource instance has no current object")
 	}
 
-	logrus.Debugf("resource instance attributes: %s", resInstance.Current.AttrsJSON)
+	if resInstance.Current.AttrsJSON != nil {
+		logrus.Debugf("JSON-encoded attributes of resource instance: %s", resInstance.Current.AttrsJSON)
 
-	return result.ID, nil
+		err := json.Unmarshal(resInstance.Current.AttrsJSON, &result)
+		if err != nil {
+			return "", fmt.Errorf("failed to unmarshal JSON-encoded resource instance attributes: %s", err)
+		}
+		return result.ID, nil
+	}
+	logrus.Debugf("legacy attributes of resource instance: %s", resInstance.Current.AttrsFlat)
+
+	if resInstance.Current.AttrsFlat == nil {
+		return "", fmt.Errorf("flat attribute map of resource instance is nil")
+	}
+
+	return resInstance.Current.AttrsFlat["id"], nil
 }
 
 type ResourceID struct {
