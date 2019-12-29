@@ -76,7 +76,7 @@ func TestTerraformProvider_InstallProvider(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			os.RemoveAll(".terradozer")
 
-			_, _, err := InstallProvider(tc.providerName, tc.constraint, true)
+			p, err := InstallProvider(tc.providerName, tc.constraint, true)
 			require.NoError(t, err)
 
 			if tc.expectedFile != "" {
@@ -86,6 +86,8 @@ func TestTerraformProvider_InstallProvider(t *testing.T) {
 				}
 				defer f.Close()
 
+				assert.Equal(t, tc.providerName, p.Name)
+				assert.Equal(t, tc.constraint, p.Version.MustParse().String())
 				assert.Equal(t, tc.expectedChecksum, checksum(t, f))
 			}
 		})
@@ -127,8 +129,10 @@ func TestTerraformProvider_InstallProvider_Cache(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			os.RemoveAll(".terradozer")
 
-			_, _, err := InstallProvider(tc.providerName, tc.constraint, tc.useCache)
+			p, err := InstallProvider(tc.providerName, tc.constraint, tc.useCache)
 			require.NoError(t, err)
+			assert.Equal(t, tc.providerName, p.Name)
+			assert.Equal(t, tc.constraint, p.Version.MustParse().String())
 
 			_, err = ioutil.ReadFile(tc.expectedFile)
 			if err != nil {
@@ -144,15 +148,17 @@ func TestTerraformProvider_InstallProvider_Cache(t *testing.T) {
 				}
 			}
 
-			_, _, err = InstallProvider(tc.providerName, tc.constraint, tc.useCache)
+			p2, err := InstallProvider(tc.providerName, tc.constraint, tc.useCache)
 			require.NoError(t, err)
+			assert.Equal(t, tc.providerName, p2.Name)
+			assert.Equal(t, tc.constraint, p2.Version.MustParse().String())
 
 			modTimeAfterSecondInstall := modifiedTime(t, tc.expectedFile)
 
 			if tc.useCache {
-				assert.Equal(t, modTime, modTimeAfterSecondInstall)
+				assert.True(t, modTime.Equal(modTimeAfterSecondInstall))
 			} else {
-				assert.NotEqual(t, modTime, modTimeAfterSecondInstall)
+				assert.True(t, modTime.Before(modTimeAfterSecondInstall))
 			}
 		})
 	}
