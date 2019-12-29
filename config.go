@@ -12,10 +12,8 @@ func ProviderConfig(name string) (cty.Value, string, error) {
 	switch name {
 	case "aws":
 		return awsProviderConfig(), "2.43.0", nil
-	case "random":
-		return cty.EmptyObjectVal, "", nil
 	default:
-		return cty.NilVal, "", fmt.Errorf("provider config not found; provider might not yet be supported: %s", name)
+		return cty.NilVal, "", fmt.Errorf("provider config not found: %s", name)
 	}
 }
 

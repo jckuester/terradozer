@@ -73,8 +73,8 @@ func mainExitCode() int {
 		pName := resAddr.Resource.Resource.DefaultProviderConfig().StringCompact()
 		p, ok := providers[pName]
 		if !ok {
-			// this error should not happen
-			logrus.Errorf("failed to find provider in provider list: %s", pName)
+			logrus.Debugf("provider not found in provider list: %s", pName)
+			continue
 		}
 
 		resMode := resAddr.ContainingResource().Resource.Mode

@@ -37,7 +37,7 @@ func InitEnv(t *testing.T) EnvVars {
 	}
 }
 
-func TestAcc_SingleResource(t *testing.T) {
+func TestAcc_DeleteSingleAwsResource(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping acceptance test.")
 	}
@@ -45,6 +45,41 @@ func TestAcc_SingleResource(t *testing.T) {
 	env := InitEnv(t)
 
 	terraformDir := "./test-fixtures/single-resource"
+
+	terraformOptions := &terraform.Options{
+		TerraformDir: terraformDir,
+		NoColor:      true,
+		Vars: map[string]interface{}{
+			"region":  env.AWSRegion,
+			"profile": env.AWSProfile,
+			"name":    "terradozer",
+		},
+	}
+
+	defer terraform.Destroy(t, terraformOptions)
+
+	terraform.InitAndApply(t, terraformOptions)
+
+	actualVpcId := terraform.Output(t, terraformOptions, "vpc_id")
+	aws.GetVpcById(t, actualVpcId, env.AWSRegion)
+
+	os.Args = []string{"cmd", "-state", terraformDir + "/terraform.tfstate"}
+	exitCode := mainExitCode()
+
+	assert.Equal(t, 0, exitCode)
+
+	_, err := aws.GetVpcByIdE(t, actualVpcId, env.AWSRegion)
+	assert.Error(t, err, "resource hasn't been deleted")
+}
+
+func TestAcc_SkipUnsupportedProvider(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping acceptance test.")
+	}
+
+	env := InitEnv(t)
+
+	terraformDir := "./test-fixtures/unsupported-provider"
 
 	terraformOptions := &terraform.Options{
 		TerraformDir: terraformDir,

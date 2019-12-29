@@ -199,7 +199,8 @@ func InitProviders(providerAddrs []addrs.AbsProviderConfig) (map[string]*Terrafo
 
 		pConfig, pVersion, err := ProviderConfig(pName)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get provider config: %s", err)
+			logrus.Infof("ignoring resources of provider (name=%s) as it is not (yet) supported", pName)
+			continue
 		}
 
 		metaPlugin, err := InstallProvider(pName, pVersion, true)
