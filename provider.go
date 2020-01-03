@@ -141,12 +141,31 @@ func (p TerraformProvider) applyResourceChange(resType string,
 
 	response := p.provider.ApplyResourceChange(providers.ApplyResourceChangeRequest{
 		TypeName:       resType,
-		PriorState:     readResp.NewState,
+		PriorState:     enableForceDestroyAttributes(readResp.NewState),
 		PlannedState:   cty.NullVal(cty.DynamicPseudoType),
 		Config:         cty.NullVal(cty.DynamicPseudoType),
 		PlannedPrivate: readResp.Private,
 	})
 	return response
+}
+
+// enableForceDestroyAttributes sets force destroy attributes to true to be able to successfully delete some resources
+func enableForceDestroyAttributes(state cty.Value) cty.Value {
+	stateWithDestroyAttrs := map[string]cty.Value{}
+
+	if state.CanIterateElements() {
+		for k, v := range state.AsValueMap() {
+			if k == "force_detach_policies" || k == "force_destroy" {
+				if v.Type().Equals(cty.Bool) {
+					stateWithDestroyAttrs[k] = cty.True
+				}
+			} else {
+				stateWithDestroyAttrs[k] = v
+			}
+		}
+	}
+
+	return cty.ObjectVal(stateWithDestroyAttrs)
 }
 
 func InstallProvider(providerName, constraint string, useCache bool) (discovery.PluginMeta, error) {

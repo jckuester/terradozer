@@ -4,11 +4,11 @@ import (
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
+	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/gruntwork-io/terratest/modules/aws"
-
 	"github.com/gruntwork-io/terratest/modules/terraform"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // EnvVars contains environment variables set for tests
@@ -37,7 +37,7 @@ func InitEnv(t *testing.T) EnvVars {
 	}
 }
 
-func TestAcc_DeleteSingleAwsResource(t *testing.T) {
+func TestAcc_DeleteResource(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping acceptance test.")
 	}
@@ -105,4 +105,116 @@ func TestAcc_SkipUnsupportedProvider(t *testing.T) {
 
 	_, err := aws.GetVpcByIdE(t, actualVpcId, env.AWSRegion)
 	assert.Error(t, err, "resource hasn't been deleted")
+}
+
+func TestAcc_DeleteNonEmptyAwsS3Bucket(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping acceptance test.")
+	}
+
+	env := InitEnv(t)
+
+	terraformDir := "./test-fixtures/non-empty-bucket"
+
+	terraformOptions := &terraform.Options{
+		TerraformDir: terraformDir,
+		NoColor:      true,
+		Vars: map[string]interface{}{
+			"region":  env.AWSRegion,
+			"profile": env.AWSProfile,
+			"name":    "terradozer",
+		},
+	}
+
+	defer terraform.Destroy(t, terraformOptions)
+
+	terraform.InitAndApply(t, terraformOptions)
+
+	actualBucketName := terraform.Output(t, terraformOptions, "bucket_name")
+	aws.AssertS3BucketExists(t, env.AWSRegion, actualBucketName)
+
+	os.Args = []string{"cmd", "-state", terraformDir + "/terraform.tfstate"}
+	exitCode := mainExitCode()
+
+	assert.Equal(t, 0, exitCode)
+
+	err := aws.AssertS3BucketExistsE(t, env.AWSRegion, actualBucketName)
+	assert.Error(t, err, "resource hasn't been deleted")
+}
+
+func TestAcc_DeleteAwsIamRoleWithAttachedPolicy(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping acceptance test.")
+	}
+
+	env := InitEnv(t)
+
+	terraformDir := "./test-fixtures/attached-policy"
+
+	terraformOptions := &terraform.Options{
+		TerraformDir: terraformDir,
+		NoColor:      true,
+		Vars: map[string]interface{}{
+			"region":  env.AWSRegion,
+			"profile": env.AWSProfile,
+			"name":    "terradozer",
+		},
+	}
+
+	defer terraform.Destroy(t, terraformOptions)
+
+	terraform.InitAndApply(t, terraformOptions)
+
+	actualIamRole := terraform.Output(t, terraformOptions, "role_name")
+	AssertIamRoleExists(t, env.AWSRegion, actualIamRole)
+
+	os.Args = []string{"cmd", "-state", terraformDir + "/terraform.tfstate"}
+	exitCode := mainExitCode()
+
+	assert.Equal(t, 0, exitCode)
+
+	err := AssertIamRoleExistsE(t, env.AWSRegion, actualIamRole)
+	assert.Error(t, err, "resource hasn't been deleted")
+}
+
+// AssertIamRoleExists checks if the given IAM role exists in the given region and fail the test if it does not.
+func AssertIamRoleExists(t *testing.T, region string, name string) {
+	err := AssertIamRoleExistsE(t, region, name)
+	require.NoError(t, err)
+}
+
+// AssertIamRoleExistsE checks if the given IAM role exists in the given region and return an error if it does not.
+func AssertIamRoleExistsE(t *testing.T, region string, name string) error {
+	iamClient, err := aws.NewIamClientE(t, region)
+	if err != nil {
+		return err
+	}
+
+	params := &iam.GetRoleInput{
+		RoleName: &name,
+	}
+
+	_, err = iamClient.GetRole(params)
+	return err
+}
+
+// AssertIamPolicyExists checks if the given IAM policy exists in the given region and fail the test if it does not.
+func AssertIamPolicyExists(t *testing.T, region string, name string) {
+	err := AssertIamPolicyExistsE(t, region, name)
+	require.NoError(t, err)
+}
+
+// AssertIamPolicyExistsE checks if the given IAM role exists in the given region and return an error if it does not.
+func AssertIamPolicyExistsE(t *testing.T, region string, arn string) error {
+	iamClient, err := aws.NewIamClientE(t, region)
+	if err != nil {
+		return err
+	}
+
+	params := &iam.GetPolicyInput{
+		PolicyArn: &arn,
+	}
+
+	_, err = iamClient.GetPolicy(params)
+	return err
 }
