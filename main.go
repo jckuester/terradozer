@@ -3,15 +3,11 @@ package main
 //go:generate mockgen -source=provider.go -destination=provider_mock_test.go -package=main
 
 import (
-	"encoding/json"
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
 
-	"github.com/hashicorp/terraform/addrs"
-	"github.com/hashicorp/terraform/states"
 	"github.com/sirupsen/logrus"
 )
 
@@ -45,113 +41,47 @@ func mainExitCode() int {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
-	state, err := getState(pathToState)
+	state, err := NewState(pathToState)
 	if err != nil {
 		logrus.WithError(err).Error("failed to get Terraform state")
 		return 1
 	}
 	logrus.Infof("using state: %s", pathToState)
 
-	providers, err := InitProviders(state.ProviderAddrs())
+	providers, err := InitProviders(state.ProviderNames())
 	if err != nil {
-		logrus.WithError(err).Error("failed to initialize all needed Terraform providers to delete resources in state")
+		logrus.WithError(err).Error("failed to initialize Terraform providers needed for deletion of resources")
 		return 1
 	}
 
-	resInstances, diagnostics := lookupAllResourceInstanceAddrs(state)
-	if diagnostics.HasErrors() {
-		logrus.WithError(diagnostics.Err()).Errorf("failed to lookup resource instance addresses")
+	resources, err := state.Resources()
+	if err != nil {
+		logrus.WithError(err).Error("failed to get resources from state")
 		return 1
 	}
 
-	deletedResourcesCount := 0
+	numDeletedResources := deleteResources(resources, providers)
 
-	for _, resAddr := range resInstances {
-		logrus.Debugf("absolute address for resource instance (addr=%s)", resAddr.String())
-
-		resInstance := state.ResourceInstance(resAddr)
-		pName := resAddr.Resource.Resource.DefaultProviderConfig().StringCompact()
-		p, ok := providers[pName]
-		if !ok {
-			logrus.Debugf("provider not found in provider list: %s", pName)
-			continue
-		}
-
-		resMode := resAddr.ContainingResource().Resource.Mode
-		resType := resAddr.Resource.Resource.Type
-
-		resID, err := getResourceID(resInstance)
-		if err != nil {
-			logrus.WithError(err).Errorf("failed to get ID for resource (addr=%s)", resAddr.String())
-			return 1
-		}
-
-		logrus.Debugf("resource instance (mode=%s, type=%s, id=%s)", resMode, resType, resID)
-
-		if resMode != addrs.ManagedResourceMode {
-			logrus.Infof("can only delete managed resources defined by a resource block; therefore skipping resource (type=%s, id=%s)", resType, resID)
-			continue
-		}
-
-		importResp := p.ImportResource(resType, resID)
-		if importResp.Diagnostics.HasErrors() {
-			logrus.WithError(importResp.Diagnostics.Err()).Infof("failed to import resource; therefore skipping resource (type=%s, id=%s)", resType, resID)
-			continue
-		}
-
-		for _, resImp := range importResp.ImportedResources {
-			logrus.Debugf("imported resource (type=%s, id=%s): %s", resType, resID, resImp.State.GoString())
-
-			readResp := p.ReadResource(resImp)
-			if readResp.Diagnostics.HasErrors() {
-				logrus.WithError(readResp.Diagnostics.Err()).Infof("failed to read resource and refreshing its current state; therefore skipping resource (type=%s, id=%s)", resType, resID)
-				continue
-			}
-
-			logrus.Debugf("read resource (type=%s, id=%s): %s", resType, resID, readResp.NewState.GoString())
-
-			resourceNotExists := readResp.NewState.IsNull()
-			if resourceNotExists {
-				logrus.Infof("resource found in state does not exist anymore (type=%s, id=%s)", resImp.TypeName, resID)
-				continue
-			}
-
-			if p.DeleteResource(resType, resID, readResp, dryRun) {
-				deletedResourcesCount++
-			}
-		}
-	}
-
-	logrus.Infof("total number of resources deleted: %d\n", deletedResourcesCount)
+	logrus.Infof("total number of resources deleted: %d\n", numDeletedResources)
 
 	return 0
 }
 
-func getResourceID(resInstance *states.ResourceInstance) (string, error) {
-	var result ResourceID
+func deleteResources(resources []Resource, providers map[string]*TerraformProvider) int {
+	deletionCount := 0
 
-	if !resInstance.HasCurrent() {
-		return "", fmt.Errorf("resource instance has no current object")
-	}
-
-	if resInstance.Current.AttrsJSON != nil {
-		logrus.Debugf("JSON-encoded attributes of resource instance: %s", resInstance.Current.AttrsJSON)
-
-		err := json.Unmarshal(resInstance.Current.AttrsJSON, &result)
-		if err != nil {
-			return "", fmt.Errorf("failed to unmarshal JSON-encoded resource instance attributes: %s", err)
+	for _, r := range resources {
+		p, ok := providers[r.Provider]
+		if !ok {
+			logrus.Debugf("Terraform provider not found in provider list: %s", r.Provider)
+			continue
 		}
-		return result.ID, nil
+
+		deleted := p.DeleteResource(r, dryRun)
+		if deleted {
+			deletionCount++
+		}
 	}
-	logrus.Debugf("legacy attributes of resource instance: %s", resInstance.Current.AttrsFlat)
 
-	if resInstance.Current.AttrsFlat == nil {
-		return "", fmt.Errorf("flat attribute map of resource instance is nil")
-	}
-
-	return resInstance.Current.AttrsFlat["id"], nil
-}
-
-type ResourceID struct {
-	ID string `json:"id"`
+	return deletionCount
 }

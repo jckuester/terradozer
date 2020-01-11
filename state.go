@@ -1,22 +1,29 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"sort"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/hashicorp/terraform/addrs"
 	"github.com/hashicorp/terraform/states"
 	"github.com/hashicorp/terraform/states/statefile"
-	"github.com/hashicorp/terraform/tfdiags"
 )
 
-func getState(path string) (*states.State, error) {
+type State struct {
+	state *states.State
+}
+
+func NewState(path string) (*State, error) {
 	stateFile, err := getStateFromPath(path)
 	if err != nil {
 		return nil, err
 	}
-	return stateFile.State, nil
+
+	return &State{stateFile.State}, nil
 }
 
 // copied from github.com/hashicorp/terraform/command/show.go
@@ -35,17 +42,92 @@ func getStateFromPath(path string) (*statefile.File, error) {
 	return stateFile, nil
 }
 
-// copied from github.com/hashicorp/terraform/command/state_meta.go
-func lookupAllResourceInstanceAddrs(state *states.State) ([]addrs.AbsResourceInstance, tfdiags.Diagnostics) {
+// ProviderNames returns a list of all provider names found in the state (e.g., "aws", "google")
+func (s *State) ProviderNames() []string {
+	var providers []string
+
+	for _, pAddr := range s.state.ProviderAddrs() {
+		providers = append(providers, pAddr.ProviderConfig.StringCompact())
+	}
+
+	return providers
+}
+
+type Resource struct {
+	Type string
+	// Provider is responsible for deleting a resource
+	Provider string
+	// Mode must be of ManagedResourceMode to delete a resource
+	Mode addrs.ResourceMode
+	// ID is needed by the provider to import and delete the resource
+	ID string
+}
+
+// Resources returns all the resources in a state
+func (s *State) Resources() ([]Resource, error) {
+	var resources []Resource
+
+	for _, resAddr := range lookupAllResourceInstanceAddrs(s.state) {
+		logrus.Debugf("absolute address for resource instance (addr=%s)", resAddr.String())
+
+		resInstance := s.state.ResourceInstance(resAddr)
+		resID, err := getResourceID(resInstance)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get ID for resource (addr=%s): %s", resAddr.String(), err)
+		}
+
+		r := Resource{
+			Type:     resAddr.Resource.Resource.Type,
+			Provider: resAddr.Resource.Resource.DefaultProviderConfig().StringCompact(),
+			Mode:     resAddr.ContainingResource().Resource.Mode,
+			ID:       resID,
+		}
+
+		resources = append(resources, r)
+	}
+
+	return resources, nil
+}
+
+type ResourceID struct {
+	ID string `json:"id"`
+}
+
+func getResourceID(resInstance *states.ResourceInstance) (string, error) {
+	var result ResourceID
+
+	if !resInstance.HasCurrent() {
+		return "", fmt.Errorf("resource instance has no current object")
+	}
+
+	if resInstance.Current.AttrsJSON != nil {
+		logrus.Debugf("JSON-encoded attributes of resource instance: %s", resInstance.Current.AttrsJSON)
+
+		err := json.Unmarshal(resInstance.Current.AttrsJSON, &result)
+		if err != nil {
+			return "", fmt.Errorf("failed to unmarshal JSON-encoded resource instance attributes: %s", err)
+		}
+		return result.ID, nil
+	}
+	logrus.Debugf("legacy attributes of resource instance: %s", resInstance.Current.AttrsFlat)
+
+	if resInstance.Current.AttrsFlat == nil {
+		return "", fmt.Errorf("flat attribute map of resource instance is nil")
+	}
+
+	return resInstance.Current.AttrsFlat["id"], nil
+}
+
+// copied (and modified) from github.com/hashicorp/terraform/command/state_meta.go
+func lookupAllResourceInstanceAddrs(state *states.State) []addrs.AbsResourceInstance {
 	var ret []addrs.AbsResourceInstance
-	var diags tfdiags.Diagnostics
 	for _, ms := range state.Modules {
 		ret = append(ret, collectModuleResourceInstances(ms)...)
 	}
 	sort.Slice(ret, func(i, j int) bool {
 		return ret[i].Less(ret[j])
 	})
-	return ret, diags
+	return ret
 }
 
 // copied from github.com/hashicorp/terraform/command/state_meta.go
