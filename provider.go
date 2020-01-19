@@ -114,8 +114,8 @@ func (p TerraformProvider) readResource(r providers.ImportedResource) providers.
 	return response
 }
 
-// DeleteResource needs the Terraform resource ID to delete a resource
-func (p TerraformProvider) DeleteResource(r Resource, dryRun bool) bool {
+// Delete needs the Terraform resource ID to delete a resource
+func (p TerraformProvider) Delete(r Resource, dryRun bool) bool {
 	logrus.Debugf("resource instance (mode=%s, type=%s, id=%s)", r.Mode, r.Type, r.ID)
 
 	if r.Mode != addrs.ManagedResourceMode {
@@ -241,8 +241,8 @@ func installProvider(providerName, constraint string, useCache bool) (discovery.
 
 // InitProviders installs, initializes (starts the plugin binary process), and configures
 // each provider in the given list of provider names
-func InitProviders(providerNames []string) (map[string]*TerraformProvider, error) {
-	providers := map[string]*TerraformProvider{}
+func InitProviders(providerNames []string) (map[string]ResourceDeleter, error) {
+	providers := map[string]ResourceDeleter{}
 
 	for _, pName := range providerNames {
 		logrus.Debugf("provider name: %s", pName)

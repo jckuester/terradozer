@@ -177,6 +177,53 @@ func TestAcc_DeleteAwsIamRoleWithAttachedPolicy(t *testing.T) {
 	assert.Error(t, err, "resource hasn't been deleted")
 }
 
+func TestAcc_DeleteDependentResources(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping acceptance test.")
+	}
+
+	env := InitEnv(t)
+
+	terraformDir := "./test-fixtures/dependent-resources"
+
+	terraformOptions := &terraform.Options{
+		TerraformDir: terraformDir,
+		NoColor:      true,
+		Vars: map[string]interface{}{
+			"region":  env.AWSRegion,
+			"profile": env.AWSProfile,
+			"name":    "terradozer",
+		},
+	}
+
+	defer terraform.Destroy(t, terraformOptions)
+
+	terraform.InitAndApply(t, terraformOptions)
+
+	actualVpcId := terraform.Output(t, terraformOptions, "vpc_id")
+	aws.GetVpcById(t, actualVpcId, env.AWSRegion)
+
+	actualIamRole := terraform.Output(t, terraformOptions, "role_name")
+	AssertIamRoleExists(t, env.AWSRegion, actualIamRole)
+
+	actualIamPolicyARN := terraform.Output(t, terraformOptions, "policy_arn")
+	AssertIamPolicyExists(t, env.AWSRegion, actualIamPolicyARN)
+
+	os.Args = []string{"cmd", "-state", terraformDir + "/terraform.tfstate"}
+	exitCode := mainExitCode()
+
+	assert.Equal(t, 0, exitCode)
+
+	_, err := aws.GetVpcByIdE(t, actualVpcId, env.AWSRegion)
+	assert.Error(t, err, "resource hasn't been deleted")
+
+	err = AssertIamRoleExistsE(t, env.AWSRegion, actualIamRole)
+	assert.Error(t, err, "resource hasn't been deleted")
+
+	err = AssertIamPolicyExistsE(t, env.AWSRegion, actualIamPolicyARN)
+	assert.Error(t, err, "resource hasn't been deleted")
+}
+
 // AssertIamRoleExists checks if the given IAM role exists in the given region and fail the test if it does not.
 func AssertIamRoleExists(t *testing.T, region string, name string) {
 	err := AssertIamRoleExistsE(t, region, name)

@@ -1,6 +1,7 @@
 package main
 
 //go:generate mockgen -source=provider.go -destination=provider_mock_test.go -package=main
+//go:generate mockgen -source=main.go -destination=main_mock_test.go -package=main
 
 import (
 	"flag"
@@ -60,15 +61,18 @@ func mainExitCode() int {
 		return 1
 	}
 
-	numDeletedResources := deleteResources(resources, providers)
-
-	logrus.Infof("total number of resources deleted: %d\n", numDeletedResources)
+	logrus.Infof("total number of resources deleted: %d\n", delete(resources, providers))
 
 	return 0
 }
 
-func deleteResources(resources []Resource, providers map[string]*TerraformProvider) int {
+type ResourceDeleter interface {
+	Delete(r Resource, dryRun bool) bool
+}
+
+func delete(resources []Resource, providers map[string]ResourceDeleter) int {
 	deletionCount := 0
+	var resFailed []Resource
 
 	for _, r := range resources {
 		p, ok := providers[r.Provider]
@@ -77,10 +81,19 @@ func deleteResources(resources []Resource, providers map[string]*TerraformProvid
 			continue
 		}
 
-		deleted := p.DeleteResource(r, dryRun)
+		deleted := p.(ResourceDeleter).Delete(r, dryRun)
 		if deleted {
+			logrus.Debugf("resource deleted (type=%s, ID=%s)", r.Type, r.ID)
 			deletionCount++
+		} else {
+			resFailed = append(resFailed, r)
 		}
+	}
+
+	if len(resFailed) > 0 && deletionCount > 0 {
+		logrus.Debugf("retrying to delete resources that possibly were dependencies before: %+v", resFailed)
+
+		deletionCount += delete(resFailed, providers)
 	}
 
 	return deletionCount

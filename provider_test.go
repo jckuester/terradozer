@@ -9,18 +9,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/gruntwork-io/terratest/modules/aws"
 	"github.com/gruntwork-io/terratest/modules/terraform"
 	"github.com/hashicorp/terraform/addrs"
-	"github.com/zclconf/go-cty/cty"
-
-	"github.com/stretchr/testify/assert"
-
-	"github.com/stretchr/testify/require"
-
-	"github.com/golang/mock/gomock"
-
 	"github.com/hashicorp/terraform/providers"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/zclconf/go-cty/cty"
 )
 
 func TestTerraformProvider_DeleteResource_DryRun(t *testing.T) {
@@ -65,7 +61,7 @@ func TestTerraformProvider_DeleteResource_DryRun(t *testing.T) {
 				Provider: "aws",
 			}
 
-			p.DeleteResource(r, tc.dryRun)
+			p.Delete(r, tc.dryRun)
 			ctrl.Finish()
 		})
 	}
@@ -217,7 +213,7 @@ func TestTerraformProvider_ImportResource(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, providers, 1)
 
-	importResp := providers["aws"].importResource("aws_vpc", actualVpcId)
+	importResp := providers["aws"].(TerraformProvider).importResource("aws_vpc", actualVpcId)
 	assert.NoError(t, importResp.Diagnostics.Err())
 	assert.Len(t, importResp.ImportedResources, 1)
 
@@ -276,7 +272,7 @@ func TestTerraformProvider_ReadResource(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, p, 1)
 
-	readResp := p["aws"].readResource(providers.ImportedResource{
+	readResp := p["aws"].(TerraformProvider).readResource(providers.ImportedResource{
 		TypeName: "aws_vpc",
 		State: cty.ObjectVal(map[string]cty.Value{
 			"arn":                              cty.NullVal(cty.String),
@@ -311,6 +307,10 @@ func TestTerraformProvider_ReadResource(t *testing.T) {
 }
 
 func TestInitProviders(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test.")
+	}
+
 	tests := []struct {
 		name                  string
 		providerNames         []string
@@ -341,7 +341,7 @@ func TestInitProviders(t *testing.T) {
 				require.NoError(t, err)
 
 				for pName, p := range actualProviders {
-					assert.NotNil(t, p.provider)
+					assert.NotNil(t, p.(TerraformProvider).provider)
 					assert.Contains(t, tc.expectedProviderNames, pName)
 				}
 			}
