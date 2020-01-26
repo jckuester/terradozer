@@ -9,63 +9,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/gruntwork-io/terratest/modules/aws"
 	"github.com/gruntwork-io/terratest/modules/terraform"
-	"github.com/hashicorp/terraform/addrs"
 	"github.com/hashicorp/terraform/providers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zclconf/go-cty/cty"
 )
-
-func TestTerraformProvider_DeleteResource_DryRun(t *testing.T) {
-	tests := []struct {
-		name                string
-		dryRun              bool
-		expectedTimesCalled int
-	}{
-		{
-			name:                "with dry-run flag",
-			dryRun:              true,
-			expectedTimesCalled: 0,
-		},
-		{
-			name:                "without dry-run flag",
-			dryRun:              false,
-			expectedTimesCalled: 1,
-		},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-
-			m := NewMockProvider(ctrl)
-
-			m.EXPECT().ImportResourceState(gomock.Any()).Return(providers.ImportResourceStateResponse{
-				ImportedResources: []providers.ImportedResource{{TypeName: "foo"}}}).Times(tc.expectedTimesCalled)
-
-			m.EXPECT().ReadResource(gomock.Any()).Return(providers.ReadResourceResponse{
-				NewState: cty.ObjectVal(map[string]cty.Value{}),
-			}).Times(tc.expectedTimesCalled)
-
-			m.EXPECT().ApplyResourceChange(gomock.Any()).
-				Return(providers.ApplyResourceChangeResponse{}).Times(tc.expectedTimesCalled)
-
-			p := &TerraformProvider{m}
-
-			r := Resource{
-				Type:     "aws_vpc",
-				Mode:     addrs.ManagedResourceMode,
-				ID:       "testID",
-				Provider: "aws",
-			}
-
-			p.Delete(r, tc.dryRun)
-			ctrl.Finish()
-		})
-	}
-}
 
 func TestTerraformProvider_InstallProvider(t *testing.T) {
 	if testing.Short() {
@@ -213,7 +163,7 @@ func TestTerraformProvider_ImportResource(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, providers, 1)
 
-	importResp := providers["aws"].(TerraformProvider).importResource("aws_vpc", actualVpcId)
+	importResp := providers["aws"].importResource("aws_vpc", actualVpcId)
 	assert.NoError(t, importResp.Diagnostics.Err())
 	assert.Len(t, importResp.ImportedResources, 1)
 
@@ -272,7 +222,7 @@ func TestTerraformProvider_ReadResource(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, p, 1)
 
-	readResp := p["aws"].(TerraformProvider).readResource(providers.ImportedResource{
+	readResp := p["aws"].readResource(providers.ImportedResource{
 		TypeName: "aws_vpc",
 		State: cty.ObjectVal(map[string]cty.Value{
 			"arn":                              cty.NullVal(cty.String),
@@ -341,7 +291,7 @@ func TestInitProviders(t *testing.T) {
 				require.NoError(t, err)
 
 				for pName, p := range actualProviders {
-					assert.NotNil(t, p.(TerraformProvider).provider)
+					assert.NotNil(t, p.provider)
 					assert.Contains(t, tc.expectedProviderNames, pName)
 				}
 			}

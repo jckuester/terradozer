@@ -1,7 +1,7 @@
 package main
 
 //go:generate mockgen -source=provider.go -destination=provider_mock_test.go -package=main
-//go:generate mockgen -source=main.go -destination=main_mock_test.go -package=main
+//go:generate mockgen -source=resource.go -destination=resource_mock_test.go -package=main
 
 import (
 	"flag"
@@ -51,50 +51,23 @@ func mainExitCode() int {
 
 	providers, err := InitProviders(state.ProviderNames())
 	if err != nil {
-		logrus.WithError(err).Error("failed to initialize Terraform providers needed for deletion of resources")
+		logrus.WithError(err).Error("failed to initialize Terraform providers")
 		return 1
 	}
 
-	resources, err := state.Resources()
+	resources, err := state.Resources(providers)
 	if err != nil {
-		logrus.WithError(err).Error("failed to get resources from state")
+		logrus.WithError(err).Error("failed to get resources from Terraform state")
 		return 1
 	}
 
-	logrus.Infof("total number of resources deleted: %d\n", delete(resources, providers))
+	numDeletedResources := Delete(resources, dryRun)
+
+	if dryRun {
+		logrus.Infof("total number of resources that would be deleted: %d", numDeletedResources)
+	} else {
+		logrus.Infof("total number of deleted resources: %d", numDeletedResources)
+	}
 
 	return 0
-}
-
-type ResourceDeleter interface {
-	Delete(r Resource, dryRun bool) bool
-}
-
-func delete(resources []Resource, providers map[string]ResourceDeleter) int {
-	deletionCount := 0
-	var resFailed []Resource
-
-	for _, r := range resources {
-		p, ok := providers[r.Provider]
-		if !ok {
-			logrus.Debugf("Terraform provider not found in provider list: %s", r.Provider)
-			continue
-		}
-
-		deleted := p.(ResourceDeleter).Delete(r, dryRun)
-		if deleted {
-			logrus.Debugf("resource deleted (type=%s, ID=%s)", r.Type, r.ID)
-			deletionCount++
-		} else {
-			resFailed = append(resFailed, r)
-		}
-	}
-
-	if len(resFailed) > 0 && deletionCount > 0 {
-		logrus.Debugf("retrying to delete resources that possibly were dependencies before: %+v", resFailed)
-
-		deletionCount += delete(resFailed, providers)
-	}
-
-	return deletionCount
 }

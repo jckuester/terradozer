@@ -114,57 +114,6 @@ func (p TerraformProvider) readResource(r providers.ImportedResource) providers.
 	return response
 }
 
-// Delete needs the Terraform resource ID to delete a resource
-func (p TerraformProvider) Delete(r Resource, dryRun bool) bool {
-	logrus.Debugf("resource instance (mode=%s, type=%s, id=%s)", r.Mode, r.Type, r.ID)
-
-	if r.Mode != addrs.ManagedResourceMode {
-		logrus.Infof("can only delete managed resources defined by a resource block; therefore skipping resource (type=%s, id=%s)", r.Type, r.ID)
-		return true
-	}
-
-	if dryRun {
-		logrus.Printf("would try to delete resource (type=%s, id=%s)\n", r.Type, r.ID)
-		return true
-	}
-
-	importResp := p.importResource(r.Type, r.ID)
-	if importResp.Diagnostics.HasErrors() {
-		logrus.WithError(importResp.Diagnostics.Err()).Infof("failed to import resource; therefore skipping resource (type=%s, id=%s)", r.Type, r.ID)
-		return true
-	}
-
-	for _, resImp := range importResp.ImportedResources {
-		logrus.Debugf("imported resource (type=%s, id=%s): %s", r.Type, r.ID, resImp.State.GoString())
-
-		readResp := p.readResource(resImp)
-		if readResp.Diagnostics.HasErrors() {
-			logrus.WithError(readResp.Diagnostics.Err()).Infof("failed to read resource and refreshing its current state; therefore skipping resource (type=%s, id=%s)", r.Type, r.ID)
-			return true
-		}
-
-		logrus.Debugf("read resource (type=%s, id=%s): %s", r.Type, r.ID, readResp.NewState.GoString())
-
-		resourceNotExists := readResp.NewState.IsNull()
-		if resourceNotExists {
-			logrus.Infof("resource found in state does not exist anymore (type=%s, id=%s)", resImp.TypeName, r.ID)
-			return true
-		}
-
-		respApply := p.destroy(r.Type, readResp.NewState)
-		if respApply.Diagnostics.HasErrors() {
-			logrus.WithError(respApply.Diagnostics.Err()).Infof(
-				"failed to delete resource (type=%s, id=%s); skipping resource", r.Type, r.ID)
-			return false
-		}
-		logrus.Debugf("new resource state after apply: %s", respApply.NewState.GoString())
-
-		logrus.Printf("deleted resource (type=%s, id=%s)\n", r.Type, r.ID)
-	}
-
-	return true
-}
-
 func (p TerraformProvider) destroy(resType string, currentState cty.Value) providers.ApplyResourceChangeResponse {
 	response := p.provider.ApplyResourceChange(providers.ApplyResourceChangeRequest{
 		TypeName:     resType,
@@ -241,15 +190,15 @@ func installProvider(providerName, constraint string, useCache bool) (discovery.
 
 // InitProviders installs, initializes (starts the plugin binary process), and configures
 // each provider in the given list of provider names
-func InitProviders(providerNames []string) (map[string]ResourceDeleter, error) {
-	providers := map[string]ResourceDeleter{}
+func InitProviders(providerNames []string) (map[string]*TerraformProvider, error) {
+	providers := map[string]*TerraformProvider{}
 
 	for _, pName := range providerNames {
 		logrus.Debugf("provider name: %s", pName)
 
 		pConfig, pVersion, err := ProviderConfig(pName)
 		if err != nil {
-			logrus.Infof("ignoring resources of provider (name=%s) as it is not (yet) supported", pName)
+			logrus.Infof("ignoring all resources of provider (name=%s) that is not (yet) supported", pName)
 			continue
 		}
 

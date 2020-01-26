@@ -46,6 +46,8 @@ func getStateFromPath(path string) (*statefile.File, error) {
 func (s *State) ProviderNames() []string {
 	var providers []string
 
+	logrus.Debugf("provider addresses found in state: %s", s.state.ProviderAddrs())
+
 	for _, pAddr := range s.state.ProviderAddrs() {
 		providers = append(providers, pAddr.ProviderConfig.StringCompact())
 	}
@@ -53,19 +55,9 @@ func (s *State) ProviderNames() []string {
 	return providers
 }
 
-type Resource struct {
-	Type string
-	// Provider is responsible for deleting a resource
-	Provider string
-	// Mode must be of ManagedResourceMode to delete a resource
-	Mode addrs.ResourceMode
-	// ID is needed by the provider to import and delete the resource
-	ID string
-}
-
-// Resources returns all the resources in a state
-func (s *State) Resources() ([]Resource, error) {
-	var resources []Resource
+// Resources returns all the resources (not data sources) in a state for the given providers
+func (s *State) Resources(providers map[string]*TerraformProvider) ([]DeletableResource, error) {
+	var resources []DeletableResource
 
 	for _, resAddr := range lookupAllResourceInstanceAddrs(s.state) {
 		logrus.Debugf("absolute address for resource instance (addr=%s)", resAddr.String())
@@ -73,14 +65,27 @@ func (s *State) Resources() ([]Resource, error) {
 		resInstance := s.state.ResourceInstance(resAddr)
 		resID, err := getResourceID(resInstance)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get ID for resource (addr=%s): %s", resAddr.String(), err)
+			return nil, fmt.Errorf("failed to get id for resource (addr=%s): %s", resAddr.String(), err)
+		}
+
+		if resAddr.ContainingResource().Resource.Mode != addrs.ManagedResourceMode {
+			logrus.Infof("ignoring data source (type=%s, id=%s)",
+				resAddr.Resource.Resource.Type, resID)
+			continue
+		}
+
+		providerName := resAddr.Resource.Resource.DefaultProviderConfig().StringCompact()
+
+		p, ok := providers[providerName]
+		if !ok {
+			logrus.Debugf("Terraform provider not found in providers list: %s", providerName)
+			continue
 		}
 
 		r := Resource{
-			Type:     resAddr.Resource.Resource.Type,
-			Provider: resAddr.Resource.Resource.DefaultProviderConfig().StringCompact(),
-			Mode:     resAddr.ContainingResource().Resource.Mode,
-			ID:       resID,
+			TerraformType: resAddr.Resource.Resource.Type,
+			Provider:      p,
+			id:            resID,
 		}
 
 		resources = append(resources, r)
@@ -101,7 +106,7 @@ func getResourceID(resInstance *states.ResourceInstance) (string, error) {
 	}
 
 	if resInstance.Current.AttrsJSON != nil {
-		logrus.Debugf("JSON-encoded attributes of resource instance: %s", resInstance.Current.AttrsJSON)
+		logrus.Tracef("JSON-encoded attributes of resource instance: %s", resInstance.Current.AttrsJSON)
 
 		err := json.Unmarshal(resInstance.Current.AttrsJSON, &result)
 		if err != nil {
@@ -109,7 +114,7 @@ func getResourceID(resInstance *states.ResourceInstance) (string, error) {
 		}
 		return result.ID, nil
 	}
-	logrus.Debugf("legacy attributes of resource instance: %s", resInstance.Current.AttrsFlat)
+	logrus.Tracef("legacy attributes of resource instance: %s", resInstance.Current.AttrsFlat)
 
 	if resInstance.Current.AttrsFlat == nil {
 		return "", fmt.Errorf("flat attribute map of resource instance is nil")

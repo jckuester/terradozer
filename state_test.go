@@ -3,9 +3,9 @@ package main
 import (
 	"testing"
 
-	"github.com/hashicorp/terraform/states"
+	"github.com/hashicorp/terraform/builtin/providers/terraform"
 
-	"github.com/hashicorp/terraform/addrs"
+	"github.com/hashicorp/terraform/states"
 
 	"github.com/stretchr/testify/assert"
 
@@ -75,8 +75,8 @@ func TestState_ProviderNames(t *testing.T) {
 			pathToState: "test-fixtures/tfstates/empty.tfstate",
 		},
 		{
-			name:                  "multiple provider",
-			pathToState:           "test-fixtures/tfstates/multiple-provider.tfstate",
+			name:                  "multiple providers",
+			pathToState:           "test-fixtures/tfstates/multiple-providers.tfstate",
 			expectedProviderNames: []string{"aws", "random"},
 		},
 	}
@@ -94,69 +94,78 @@ func TestState_ProviderNames(t *testing.T) {
 }
 
 func Test_Resources(t *testing.T) {
+	awsDummyProvider := terraform.NewProvider()
+	awsDummyProvider.Schema.Version = 1
+
+	randomDummyProvider := terraform.NewProvider()
+	randomDummyProvider.Schema.Version = 2
+
 	tests := []struct {
 		name              string
 		pathToState       string
-		expectedResources []Resource
+		expectedResources []DeletableResource
 		expectedErrMsg    string
+		providers         map[string]*TerraformProvider
 	}{
+		{
+			name:        "empty provider list",
+			pathToState: "test-fixtures/tfstates/version3.tfstate",
+		},
 		{
 			name:        "single AWS resource",
 			pathToState: "test-fixtures/tfstates/version3.tfstate",
-			expectedResources: []Resource{
-				{
-					Type:     "aws_vpc",
-					Provider: "aws",
-					Mode:     addrs.ManagedResourceMode,
-					ID:       "vpc-003104c0d87e7a9f4",
+			providers: map[string]*TerraformProvider{
+				"aws": {awsDummyProvider},
+			},
+			expectedResources: []DeletableResource{
+				Resource{
+					TerraformType: "aws_vpc",
+					Provider:      &TerraformProvider{awsDummyProvider},
+					id:            "vpc-003104c0d87e7a9f4",
 				},
 			},
 		},
 		{
 			name:        "resources from multiple providers",
-			pathToState: "test-fixtures/tfstates/multiple-provider.tfstate",
-			expectedResources: []Resource{
-				{
-					Type:     "aws_vpc",
-					Provider: "aws",
-					Mode:     addrs.ManagedResourceMode,
-					ID:       "vpc-039b3d3fb4ffcf0ea",
+			pathToState: "test-fixtures/tfstates/multiple-providers.tfstate",
+			providers: map[string]*TerraformProvider{
+				"aws":    {awsDummyProvider},
+				"random": {randomDummyProvider},
+			},
+			expectedResources: []DeletableResource{
+				Resource{
+					TerraformType: "aws_vpc",
+					Provider:      &TerraformProvider{awsDummyProvider},
+
+					id: "vpc-039b3d3fb4ffcf0ea",
 				},
-				{
-					Type:     "random_integer",
-					Provider: "random",
-					Mode:     addrs.ManagedResourceMode,
-					ID:       "12375",
+				Resource{
+					TerraformType: "random_integer",
+					Provider:      &TerraformProvider{randomDummyProvider},
+					id:            "12375",
 				},
 			},
 		},
 		{
 			name:        "data source",
 			pathToState: "test-fixtures/tfstates/datasource.tfstate",
-			expectedResources: []Resource{
-				{
-					Type:     "aws_ami",
-					Provider: "aws",
-					Mode:     addrs.DataResourceMode,
-					ID:       "ami-04590e7389a6e577c",
-				},
-			},
+			providers:   map[string]*TerraformProvider{"aws": nil},
 		},
 		{
 			name:        "state with missing resource ID",
 			pathToState: "test-fixtures/tfstates/missing-id.tfstate",
-			expectedResources: []Resource{
-				{
-					Type:     "aws_vpc",
-					Provider: "aws",
-					Mode:     addrs.ManagedResourceMode,
-					ID:       "",
+			providers:   map[string]*TerraformProvider{"aws": nil},
+			expectedResources: []DeletableResource{
+				Resource{
+					TerraformType: "aws_vpc",
+					id:            "",
 				},
 			},
 		},
 		{
 			name:        "empty state",
 			pathToState: "test-fixtures/tfstates/empty.tfstate",
+			providers:   map[string]*TerraformProvider{"aws": nil},
 		},
 	}
 	for _, tc := range tests {
@@ -165,7 +174,7 @@ func Test_Resources(t *testing.T) {
 				s, err := NewState(tc.pathToState)
 				require.NoError(t, err)
 
-				actualResources, err := s.Resources()
+				actualResources, err := s.Resources(tc.providers)
 				require.NoError(t, err)
 
 				if tc.expectedErrMsg != "" {
