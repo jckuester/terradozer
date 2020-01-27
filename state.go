@@ -52,7 +52,24 @@ func (s *State) ProviderNames() []string {
 		providers = append(providers, pAddr.ProviderConfig.StringCompact())
 	}
 
-	return providers
+	return removeDuplicates(providers)
+}
+
+func removeDuplicates(elements []string) []string {
+	encountered := map[string]bool{}
+	var result []string
+
+	for i := range elements {
+		if encountered[elements[i]] == true {
+			// do not add duplicate
+		} else {
+			// record this element as an encountered element
+			encountered[elements[i]] = true
+			result = append(result, elements[i])
+		}
+	}
+
+	return result
 }
 
 // Resources returns all the resources (not data sources) in a state for the given providers

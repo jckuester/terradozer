@@ -79,6 +79,11 @@ func TestState_ProviderNames(t *testing.T) {
 			pathToState:           "test-fixtures/tfstates/multiple-providers.tfstate",
 			expectedProviderNames: []string{"aws", "random"},
 		},
+		{
+			name:                  "duplicate provider",
+			pathToState:           "test-fixtures/tfstates/duplicate-provider.tfstate",
+			expectedProviderNames: []string{"aws"},
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -88,7 +93,7 @@ func TestState_ProviderNames(t *testing.T) {
 
 			actualProviderNames := state.ProviderNames()
 
-			assert.Equal(t, actualProviderNames, tc.expectedProviderNames)
+			assert.Equal(t, tc.expectedProviderNames, actualProviderNames)
 		})
 	}
 }
