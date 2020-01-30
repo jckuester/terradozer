@@ -16,12 +16,15 @@ var (
 	dryRun      bool
 	logDebug    bool
 	pathToState string
+	parallel    int
 )
 
 func init() {
 	flag.BoolVar(&dryRun, "dry", false, "Don't delete anything")
 	flag.BoolVar(&logDebug, "debug", false, "Enable debug logging")
 	flag.StringVar(&pathToState, "state", "terraform.tfstate", "Path to a Terraform state file")
+	flag.IntVar(&parallel, "parallel", 5, "Limit the number of concurrent delete operations")
+
 }
 
 func main() {
@@ -61,7 +64,7 @@ func mainExitCode() int {
 		return 1
 	}
 
-	numDeletedResources := Delete(resources, dryRun)
+	numDeletedResources := Delete(resources, dryRun, parallel)
 
 	if dryRun {
 		logrus.Infof("total number of resources that would be deleted: %d", numDeletedResources)
