@@ -44,6 +44,7 @@ func newTerraformProvider(path string, logDebug bool) (*TerraformProvider, error
 	if err != nil {
 		return nil, err
 	}
+
 	return &TerraformProvider{p}, nil
 }
 
@@ -79,7 +80,7 @@ func clientConfig(m discovery.PluginMeta, loglevel hclog.Level) *goPlugin.Client
 	})
 
 	return &goPlugin.ClientConfig{
-		Cmd:              exec.Command(m.Path),
+		Cmd:              exec.Command(m.Path), //nolint:gosec
 		HandshakeConfig:  plugin.Handshake,
 		VersionedPlugins: plugin.VersionedPlugins,
 		Managed:          true,
@@ -102,6 +103,7 @@ func (p TerraformProvider) importResource(resType string, resID string) provider
 		TypeName: resType,
 		ID:       resID,
 	})
+
 	return response
 }
 
@@ -111,6 +113,7 @@ func (p TerraformProvider) readResource(r providers.ImportedResource) providers.
 		PriorState: r.State,
 		Private:    r.Private,
 	})
+
 	return response
 }
 
@@ -121,6 +124,7 @@ func (p TerraformProvider) destroy(resType string, currentState cty.Value) provi
 		PlannedState: cty.NullVal(cty.DynamicPseudoType),
 		Config:       cty.NullVal(cty.DynamicPseudoType),
 	})
+
 	return response
 }
 
@@ -175,10 +179,12 @@ func installProvider(providerName, constraint string, useCache bool) (discovery.
 		if err != nil {
 			return discovery.PluginMeta{}, fmt.Errorf("failed to parse provider version constraint: %s", err)
 		}
+
 		providerConstraint = discovery.NewConstraints(constraints)
 	}
 
 	pty := addrs.NewLegacyProvider(providerName)
+
 	meta, tfDiagnostics, err := providerInstaller.Get(pty, providerConstraint)
 	if err != nil {
 		tfDiagnostics = tfDiagnostics.Append(err)
@@ -206,6 +212,7 @@ func InitProviders(providerNames []string) (map[string]*TerraformProvider, error
 		if err != nil {
 			return nil, fmt.Errorf("failed to install provider (%s): %s", pName, err)
 		}
+
 		logrus.Infof("installed provider (name=%s, version=%s)", metaPlugin.Name, metaPlugin.Version)
 
 		p, err := newTerraformProvider(metaPlugin.Path, logDebug)
@@ -218,6 +225,7 @@ func InitProviders(providerNames []string) (map[string]*TerraformProvider, error
 			return nil, fmt.Errorf("failed to configure provider (name=%s, version=%s): %s",
 				metaPlugin.Name, metaPlugin.Version, tfDiagnostics.Err())
 		}
+
 		logrus.Infof("configured provider (name=%s, version=%s)", metaPlugin.Name, metaPlugin.Version)
 
 		providers[pName] = p

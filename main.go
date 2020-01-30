@@ -19,12 +19,12 @@ var (
 	parallel    int
 )
 
+//nolint:gochecknoinits
 func init() {
 	flag.BoolVar(&dryRun, "dry", false, "Don't delete anything")
 	flag.BoolVar(&logDebug, "debug", false, "Enable debug logging")
 	flag.StringVar(&pathToState, "state", "terraform.tfstate", "Path to a Terraform state file")
 	flag.IntVar(&parallel, "parallel", 5, "Limit the number of concurrent delete operations")
-
 }
 
 func main() {
@@ -50,6 +50,7 @@ func mainExitCode() int {
 		logrus.WithError(err).Error("failed to get Terraform state")
 		return 1
 	}
+
 	logrus.Infof("using state: %s", pathToState)
 
 	providers, err := InitProviders(state.ProviderNames())
@@ -64,7 +65,7 @@ func mainExitCode() int {
 		return 1
 	}
 
-	numDeletedResources := Delete(resources, dryRun, parallel)
+	numDeletedResources := Delete(resources, parallel)
 
 	if dryRun {
 		logrus.Infof("total number of resources that would be deleted: %d", numDeletedResources)

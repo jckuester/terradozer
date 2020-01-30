@@ -1,13 +1,19 @@
 # Terradozer
 
-Sometimes, `terraform destroy` behaves like a diva - it just wouldn't let you the way you want. 
+[![Release](https://img.shields.io/github/release/terradozer/terradozer.svg?style=for-the-badge)](https://github.com/jckuester/terradozer/releases/latest)
+[![Software License](https://img.shields.io/badge/license-MIT-brightgreen.svg?style=for-the-badge)](/LICENSE.md)
+[![Travis](https://img.shields.io/travis/jckuester/terradozer/master.svg?style=for-the-badge)](https://travis-ci.org/jckuester/terradozer)
+[![Codecov branch](https://img.shields.io/codecov/c/github/jckuester/terradozer/master.svg?style=for-the-badge)](https://codecov.io/gh/jckuester/terradozer)
+[![Go Doc](https://img.shields.io/badge/godoc-reference-blue.svg?style=for-the-badge)](http://godoc.org/github.com/jckuester/terradozer)
+
+Sometimes, `terraform destroy` behaves like a stubborn donkey - it just wouldn't want the way you want. 
 
 **YOU WANT** probably simply destroy.
 
 **IT WANTS** you all the configuration files to still exist, be valid, dependencies still exist, ... 
 the whole project be still in tact.
 
-C'mon, we want to destroy not apply.
+C'mon! We want to destroy not apply.
  
 Wouldn't it be great to bulldoze a Terraform project without all the fuzz - just based on still existing state file(s)?
  

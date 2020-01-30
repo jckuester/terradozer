@@ -1,0 +1,10 @@
+builds:
+  - ldflags: -s -w -extldflags "-static"
+    env:
+      - CGO_ENABLED=0
+    binary: terradozer
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64

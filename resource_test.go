@@ -3,8 +3,6 @@ package main
 import (
 	"testing"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -63,7 +61,6 @@ func TestResource_Delete(t *testing.T) {
 }
 
 func Test_Delete(t *testing.T) {
-	logrus.SetLevel(logrus.DebugLevel)
 	tests := []struct {
 		name                  string
 		expectedDeletionCount int
@@ -125,7 +122,7 @@ func Test_Delete(t *testing.T) {
 				resources = append(resources, m)
 			}
 
-			actualDeletionCount := Delete(resources, true, 3)
+			actualDeletionCount := Delete(resources, 3)
 			assert.Equal(t, tc.expectedDeletionCount, actualDeletionCount)
 
 			ctrl.Finish()

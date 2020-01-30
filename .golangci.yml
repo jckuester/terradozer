@@ -1,0 +1,12 @@
+run:
+  tests: false
+
+linters-settings:
+  lll:
+    maxlength: 120
+
+linters:
+  enable-all: true
+  disable:
+    - gochecknoglobals
+    - prealloc

@@ -77,15 +77,17 @@ type DeletableResource interface {
 //
 // Per iteration (run), at least one resource must be successfully deleted to retry deleting in a next run
 // (until all resources are deleted or some deletions have permanently failed).
-func Delete(resources []DeletableResource, dryRun bool, parallel int) int {
+func Delete(resources []DeletableResource, parallel int) int {
 	logrus.Debug("starting deletion run")
 
 	numOfDeletedResources := 0
+
 	var resourcesToRetry []DeletableResource
 
 	var numOfResources = len(resources)
 
 	jobQueue := make(chan DeletableResource, numOfResources)
+
 	workerResults := make(chan workerResult, numOfResources)
 
 	for workerID := 1; workerID <= parallel; workerID++ {
@@ -95,6 +97,7 @@ func Delete(resources []DeletableResource, dryRun bool, parallel int) int {
 	for _, r := range resources {
 		jobQueue <- r
 	}
+
 	close(jobQueue)
 
 	for i := 1; i <= numOfResources; i++ {
@@ -102,15 +105,16 @@ func Delete(resources []DeletableResource, dryRun bool, parallel int) int {
 		logrus.Debugf("processing worker result: %+v:", wr)
 
 		numOfDeletedResources += wr.deletionCount
+
 		if wr.resourceToRetry != nil {
-			resourcesToRetry = append(resourcesToRetry, *wr.resourceToRetry)
+			resourcesToRetry = append(resourcesToRetry, wr.resourceToRetry)
 		}
 	}
 
 	if len(resourcesToRetry) > 0 && numOfDeletedResources > 0 {
 		logrus.Debugf("retrying to delete the following resources: %+v", resourcesToRetry)
 
-		numOfDeletedResources += Delete(resourcesToRetry, dryRun, parallel)
+		numOfDeletedResources += Delete(resourcesToRetry, parallel)
 	}
 
 	return numOfDeletedResources
@@ -118,7 +122,7 @@ func Delete(resources []DeletableResource, dryRun bool, parallel int) int {
 
 type workerResult struct {
 	deletionCount   int
-	resourceToRetry *DeletableResource
+	resourceToRetry DeletableResource
 }
 
 func worker(id int, resources <-chan DeletableResource, result chan<- workerResult) {
@@ -127,20 +131,23 @@ func worker(id int, resources <-chan DeletableResource, result chan<- workerResu
 
 		err := r.Delete(dryRun)
 		if err != nil {
-			if err == RetryableError {
+			switch err {
+			case RetryableError:
 				logrus.Infof("will retry deleting resource (type=%s, id=%s)", r.Type(), r.ID())
 				logrus.WithError(err).Debugf("will retry deleting resource (type=%s, id=%s)", r.Type(), r.ID())
 
-				result <- workerResult{resourceToRetry: &r}
+				result <- workerResult{resourceToRetry: r}
+
 				continue
-			} else if err == NotExistingError {
+			case NotExistingError:
 				logrus.Infof("resource found in state has already been deleted (type=%s, id=%s)", r.Type(), r.ID())
-			} else {
+			default:
 				logrus.Infof("unable to delete resource (type=%s, id=%s)", r.Type(), r.ID())
 				logrus.WithError(err).Debugf("unable to delete resource (type=%s, id=%s)", r.Type(), r.ID())
 			}
 
 			result <- workerResult{deletionCount: 0}
+
 			continue
 		}
 

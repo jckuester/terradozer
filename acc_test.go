@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/gruntwork-io/terratest/modules/aws"
@@ -60,15 +61,15 @@ func TestAcc_DeleteResource(t *testing.T) {
 
 	terraform.InitAndApply(t, terraformOptions)
 
-	actualVpcId := terraform.Output(t, terraformOptions, "vpc_id")
-	aws.GetVpcById(t, actualVpcId, env.AWSRegion)
+	actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
+	aws.GetVpcById(t, actualVpcID, env.AWSRegion)
 
 	os.Args = []string{"cmd", "-state", terraformDir + "/terraform.tfstate"}
 	exitCode := mainExitCode()
 
 	assert.Equal(t, 0, exitCode)
 
-	_, err := aws.GetVpcByIdE(t, actualVpcId, env.AWSRegion)
+	_, err := aws.GetVpcByIdE(t, actualVpcID, env.AWSRegion)
 	assert.Error(t, err, "resource hasn't been deleted")
 }
 
@@ -95,15 +96,15 @@ func TestAcc_SkipUnsupportedProvider(t *testing.T) {
 
 	terraform.InitAndApply(t, terraformOptions)
 
-	actualVpcId := terraform.Output(t, terraformOptions, "vpc_id")
-	aws.GetVpcById(t, actualVpcId, env.AWSRegion)
+	actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
+	aws.GetVpcById(t, actualVpcID, env.AWSRegion)
 
 	os.Args = []string{"cmd", "-state", terraformDir + "/terraform.tfstate"}
 	exitCode := mainExitCode()
 
 	assert.Equal(t, 0, exitCode)
 
-	_, err := aws.GetVpcByIdE(t, actualVpcId, env.AWSRegion)
+	_, err := aws.GetVpcByIdE(t, actualVpcID, env.AWSRegion)
 	assert.Error(t, err, "resource hasn't been deleted")
 }
 
@@ -137,6 +138,7 @@ func TestAcc_DeleteNonEmptyAwsS3Bucket(t *testing.T) {
 	exitCode := mainExitCode()
 
 	assert.Equal(t, 0, exitCode)
+	time.Sleep(5 * time.Second)
 
 	err := aws.AssertS3BucketExistsE(t, env.AWSRegion, actualBucketName)
 	assert.Error(t, err, "resource hasn't been deleted")
@@ -200,8 +202,8 @@ func TestAcc_DeleteDependentResources(t *testing.T) {
 
 	terraform.InitAndApply(t, terraformOptions)
 
-	actualVpcId := terraform.Output(t, terraformOptions, "vpc_id")
-	aws.GetVpcById(t, actualVpcId, env.AWSRegion)
+	actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
+	aws.GetVpcById(t, actualVpcID, env.AWSRegion)
 
 	actualIamRole := terraform.Output(t, terraformOptions, "role_name")
 	AssertIamRoleExists(t, env.AWSRegion, actualIamRole)
@@ -214,7 +216,7 @@ func TestAcc_DeleteDependentResources(t *testing.T) {
 
 	assert.Equal(t, 0, exitCode)
 
-	_, err := aws.GetVpcByIdE(t, actualVpcId, env.AWSRegion)
+	_, err := aws.GetVpcByIdE(t, actualVpcID, env.AWSRegion)
 	assert.Error(t, err, "resource hasn't been deleted")
 
 	err = AssertIamRoleExistsE(t, env.AWSRegion, actualIamRole)
@@ -242,6 +244,7 @@ func AssertIamRoleExistsE(t *testing.T, region string, name string) error {
 	}
 
 	_, err = iamClient.GetRole(params)
+
 	return err
 }
 
@@ -263,5 +266,6 @@ func AssertIamPolicyExistsE(t *testing.T, region string, arn string) error {
 	}
 
 	_, err = iamClient.GetPolicy(params)
+
 	return err
 }

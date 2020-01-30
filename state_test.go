@@ -39,7 +39,6 @@ func Test_NewState(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-
 			actualState, err := NewState(tc.pathToState)
 
 			if tc.expectedErrMsg != "" {
@@ -49,7 +48,6 @@ func Test_NewState(t *testing.T) {
 				require.NoError(t, err)
 				assert.NotNil(t, actualState)
 			}
-
 		})
 	}
 }
@@ -87,7 +85,6 @@ func TestState_ProviderNames(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-
 			state, err := NewState(tc.pathToState)
 			require.NoError(t, err)
 
@@ -244,7 +241,6 @@ func Test_getResourceID(t *testing.T) {
 				require.NoError(t, err)
 				assert.Equal(t, tc.expectedID, actualID)
 			}
-
 		})
 	}
 }

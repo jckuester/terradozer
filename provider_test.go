@@ -156,14 +156,14 @@ func TestTerraformProvider_ImportResource(t *testing.T) {
 
 	terraform.InitAndApply(t, terraformOptions)
 
-	actualVpcId := terraform.Output(t, terraformOptions, "vpc_id")
-	aws.GetVpcById(t, actualVpcId, env.AWSRegion)
+	actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
+	aws.GetVpcById(t, actualVpcID, env.AWSRegion)
 
 	providers, err := InitProviders([]string{"aws"})
 	require.NoError(t, err)
 	require.Len(t, providers, 1)
 
-	importResp := providers["aws"].importResource("aws_vpc", actualVpcId)
+	importResp := providers["aws"].importResource("aws_vpc", actualVpcID)
 	assert.NoError(t, importResp.Diagnostics.Err())
 	assert.Len(t, importResp.ImportedResources, 1)
 
@@ -180,7 +180,7 @@ func TestTerraformProvider_ImportResource(t *testing.T) {
 		"enable_classiclink_dns_support":   cty.NullVal(cty.Bool),
 		"enable_dns_hostnames":             cty.NullVal(cty.Bool),
 		"enable_dns_support":               cty.NullVal(cty.Bool),
-		"id":                               cty.StringVal(actualVpcId),
+		"id":                               cty.StringVal(actualVpcID),
 		"instance_tenancy":                 cty.NullVal(cty.String),
 		"ipv6_association_id":              cty.NullVal(cty.String),
 		"ipv6_cidr_block":                  cty.NullVal(cty.String),
@@ -215,8 +215,8 @@ func TestTerraformProvider_ReadResource(t *testing.T) {
 
 	terraform.InitAndApply(t, terraformOptions)
 
-	actualVpcId := terraform.Output(t, terraformOptions, "vpc_id")
-	aws.GetVpcById(t, actualVpcId, env.AWSRegion)
+	actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
+	aws.GetVpcById(t, actualVpcID, env.AWSRegion)
 
 	p, err := InitProviders([]string{"aws"})
 	require.NoError(t, err)
@@ -236,7 +236,7 @@ func TestTerraformProvider_ReadResource(t *testing.T) {
 			"enable_classiclink_dns_support":   cty.NullVal(cty.Bool),
 			"enable_dns_hostnames":             cty.NullVal(cty.Bool),
 			"enable_dns_support":               cty.NullVal(cty.Bool),
-			"id":                               cty.StringVal(actualVpcId),
+			"id":                               cty.StringVal(actualVpcID),
 			"instance_tenancy":                 cty.NullVal(cty.String),
 			"ipv6_association_id":              cty.NullVal(cty.String),
 			"ipv6_cidr_block":                  cty.NullVal(cty.String),
@@ -253,7 +253,6 @@ func TestTerraformProvider_ReadResource(t *testing.T) {
 
 	assert.Equal(t, readResp.NewState.GetAttr("cidr_block"),
 		cty.StringVal("10.0.0.0/16"))
-
 }
 
 func TestInitProviders(t *testing.T) {
@@ -299,7 +298,7 @@ func TestInitProviders(t *testing.T) {
 	}
 }
 
-func checksum(t *testing.T, file *os.File) string {
+func checksum(t *testing.T, file io.Reader) string {
 	h := sha256.New()
 	if _, err := io.Copy(h, file); err != nil {
 		t.Fatal(err)
