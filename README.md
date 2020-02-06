@@ -1,21 +1,27 @@
-# Terradozer
 
+<p align="center">
+  <img alt="TerraDozer Logo" src="https://github.com/jckuester/terradozer/blob/master/img/logo.png" height="180" />
+  <h3 align="center">TerraDozer</h3>
+  <p align="center">Terraform destroy without configuration files.</p>
+</p>
+
+---
 [![Release](https://img.shields.io/github/release/terradozer/terradozer.svg?style=for-the-badge)](https://github.com/jckuester/terradozer/releases/latest)
 [![Software License](https://img.shields.io/badge/license-MIT-brightgreen.svg?style=for-the-badge)](/LICENSE.md)
 [![Travis](https://img.shields.io/travis/jckuester/terradozer/master.svg?style=for-the-badge)](https://travis-ci.org/jckuester/terradozer)
 [![Codecov branch](https://img.shields.io/codecov/c/github/jckuester/terradozer/master.svg?style=for-the-badge)](https://codecov.io/gh/jckuester/terradozer)
 [![Go Doc](https://img.shields.io/badge/godoc-reference-blue.svg?style=for-the-badge)](http://godoc.org/github.com/jckuester/terradozer)
 
-Sometimes, `terraform destroy` behaves like a stubborn donkey - it just wouldn't want the way you want. 
+Sometimes, `terraform destroy` behaves like a stubborn donkey - it just doesn't want the way you want.
 
-**YOU WANT** probably simply destroy.
+What **YOU WANT** is probably simply destroy.
 
-**IT WANTS** you all the configuration files to still exist, be valid, dependencies still exist, ... 
-the whole project be still in tact.
+What **TERRAFORM WANTS** is that all the configuration files exist, be valid, dependencies still exist, ...
+the whole project be still be in perfect shape.
 
 C'mon! We want to destroy not apply.
  
-Wouldn't it be great to bulldoze a Terraform project without all the fuzz - just based on still existing state file(s)?
+Wouldn't it be great to bulldoze a Terraform project without all the fuss - just based on still existing state file(s)?
  
 That's what Terradozer is built for!
 
