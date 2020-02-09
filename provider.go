@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
 
+	"github.com/apex/log"
 	"github.com/hashicorp/go-hclog"
 	goPlugin "github.com/hashicorp/go-plugin"
 	"github.com/hashicorp/go-version"
@@ -14,7 +16,6 @@ import (
 	"github.com/hashicorp/terraform/providers"
 	"github.com/hashicorp/terraform/tfdiags"
 	"github.com/mitchellh/cli"
-	"github.com/sirupsen/logrus"
 	"github.com/zclconf/go-cty/cty"
 )
 
@@ -167,7 +168,7 @@ func installProvider(providerName, constraint string, useCache bool) (discovery.
 		SkipVerify:            false,
 		Ui: &cli.BasicUi{
 			Reader:      os.Stdin,
-			Writer:      os.Stdout,
+			Writer:      &bytes.Buffer{},
 			ErrorWriter: os.Stderr,
 		},
 	}
@@ -200,11 +201,11 @@ func InitProviders(providerNames []string) (map[string]*TerraformProvider, error
 	providers := map[string]*TerraformProvider{}
 
 	for _, pName := range providerNames {
-		logrus.Debugf("provider name: %s", pName)
+		log.WithField("name", pName).Debug(Pad("starting to initialize provider"))
 
 		pConfig, pVersion, err := ProviderConfig(pName)
 		if err != nil {
-			logrus.Infof("ignoring all resources of provider (name=%s) that is not (yet) supported", pName)
+			log.WithField("name", pName).Info(Pad("ignoring resources of (yet) unsupported provider"))
 			continue
 		}
 
@@ -213,7 +214,10 @@ func InitProviders(providerNames []string) (map[string]*TerraformProvider, error
 			return nil, fmt.Errorf("failed to install provider (%s): %s", pName, err)
 		}
 
-		logrus.Infof("installed provider (name=%s, version=%s)", metaPlugin.Name, metaPlugin.Version)
+		log.WithFields(log.Fields{
+			"name":    metaPlugin.Name,
+			"version": metaPlugin.Version,
+		}).Info(Pad("downloaded and installed provider"))
 
 		p, err := newTerraformProvider(metaPlugin.Path, logDebug)
 		if err != nil {
@@ -226,7 +230,10 @@ func InitProviders(providerNames []string) (map[string]*TerraformProvider, error
 				metaPlugin.Name, metaPlugin.Version, tfDiagnostics.Err())
 		}
 
-		logrus.Infof("configured provider (name=%s, version=%s)", metaPlugin.Name, metaPlugin.Version)
+		log.WithFields(log.Fields{
+			"name":    metaPlugin.Name,
+			"version": metaPlugin.Version,
+		}).Info(Pad("configured provider"))
 
 		providers[pName] = p
 	}

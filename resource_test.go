@@ -1,7 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"testing"
+
+	"github.com/apex/log"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -35,11 +38,11 @@ func TestResource_Delete(t *testing.T) {
 			m := NewMockProvider(ctrl)
 
 			m.EXPECT().ImportResourceState(gomock.Any()).Return(providers.ImportResourceStateResponse{
-				ImportedResources: []providers.ImportedResource{{TypeName: "foo"}}}).Times(tc.expectedTimesCalled)
+				ImportedResources: []providers.ImportedResource{{TypeName: "foo"}}}).AnyTimes()
 
 			m.EXPECT().ReadResource(gomock.Any()).Return(providers.ReadResourceResponse{
 				NewState: cty.ObjectVal(map[string]cty.Value{}),
-			}).Times(tc.expectedTimesCalled)
+			}).AnyTimes()
 
 			m.EXPECT().ApplyResourceChange(gomock.Any()).
 				Return(providers.ApplyResourceChangeResponse{}).Times(tc.expectedTimesCalled)
@@ -61,6 +64,8 @@ func TestResource_Delete(t *testing.T) {
 }
 
 func Test_Delete(t *testing.T) {
+	log.SetLevel(log.DebugLevel)
+
 	tests := []struct {
 		name                  string
 		expectedDeletionCount int
@@ -111,7 +116,7 @@ func Test_Delete(t *testing.T) {
 				m := NewMockDeletableResource(ctrl)
 
 				resFailedDeletions := m.EXPECT().Delete(gomock.Any()).
-					Return(RetryableError).MaxTimes(numOfFailedDeletions)
+					Return(RetryableError(fmt.Errorf(""), m)).MaxTimes(numOfFailedDeletions)
 
 				m.EXPECT().Delete(gomock.Any()).
 					Return(nil).After(resFailedDeletions).AnyTimes()
@@ -122,7 +127,7 @@ func Test_Delete(t *testing.T) {
 				resources = append(resources, m)
 			}
 
-			actualDeletionCount := Delete(resources, 3)
+			actualDeletionCount := Delete(resources, false, 3)
 			assert.Equal(t, tc.expectedDeletionCount, actualDeletionCount)
 
 			ctrl.Finish()

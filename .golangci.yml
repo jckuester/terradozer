@@ -10,3 +10,4 @@ linters:
   disable:
     - gochecknoglobals
     - prealloc
+    - funlen

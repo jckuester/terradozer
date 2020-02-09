@@ -6,8 +6,7 @@ import (
 	"os"
 	"sort"
 
-	"github.com/sirupsen/logrus"
-
+	"github.com/apex/log"
 	"github.com/hashicorp/terraform/addrs"
 	"github.com/hashicorp/terraform/states"
 	"github.com/hashicorp/terraform/states/statefile"
@@ -48,7 +47,7 @@ func getStateFromPath(path string) (*statefile.File, error) {
 func (s *State) ProviderNames() []string {
 	var providers []string
 
-	logrus.Debugf("provider addresses found in state: %s", s.state.ProviderAddrs())
+	log.WithField("addresses", s.state.ProviderAddrs()).Debug(Pad("providers found in state"))
 
 	for _, pAddr := range s.state.ProviderAddrs() {
 		providers = append(providers, pAddr.ProviderConfig.StringCompact())
@@ -80,7 +79,7 @@ func (s *State) Resources(providers map[string]*TerraformProvider) ([]DeletableR
 	var resources []DeletableResource
 
 	for _, resAddr := range lookupAllResourceInstanceAddrs(s.state) {
-		logrus.Debugf("absolute address for resource instance (addr=%s)", resAddr.String())
+		log.WithField("absolute_address", resAddr.String()).Debug(Pad("looked up resource instance address"))
 
 		resInstance := s.state.ResourceInstance(resAddr)
 
@@ -90,8 +89,11 @@ func (s *State) Resources(providers map[string]*TerraformProvider) ([]DeletableR
 		}
 
 		if resAddr.ContainingResource().Resource.Mode != addrs.ManagedResourceMode {
-			logrus.Infof("ignoring data source (type=%s, id=%s)",
-				resAddr.Resource.Resource.Type, resID)
+			log.WithFields(log.Fields{
+				"mode": resAddr.Resource.Resource.Mode,
+				"type": resAddr.Resource.Resource.Type,
+				"id":   resID}).Debug(Pad("ignoring non-managed resource"))
+
 			continue
 		}
 
@@ -99,7 +101,8 @@ func (s *State) Resources(providers map[string]*TerraformProvider) ([]DeletableR
 
 		p, ok := providers[providerName]
 		if !ok {
-			logrus.Debugf("Terraform provider not found in providers list: %s", providerName)
+			log.WithField("name", providerName).Debug(Pad("Terraform provider not found in providers list"))
+
 			continue
 		}
 
@@ -119,6 +122,7 @@ type ResourceID struct {
 	ID string `json:"id"`
 }
 
+// getResourceID looks up the resource ID amongst all resource attributes
 func getResourceID(resInstance *states.ResourceInstance) (string, error) {
 	var result ResourceID
 
@@ -127,19 +131,21 @@ func getResourceID(resInstance *states.ResourceInstance) (string, error) {
 	}
 
 	if resInstance.Current.AttrsJSON != nil {
-		logrus.Tracef("JSON-encoded attributes of resource instance: %s", resInstance.Current.AttrsJSON)
-
 		err := json.Unmarshal(resInstance.Current.AttrsJSON, &result)
 		if err != nil {
+			log.WithField("attributes", resInstance.Current.AttrsJSON).
+				Debug(Pad("JSON-encoded attributes of resource instance"))
+
 			return "", fmt.Errorf("failed to unmarshal JSON-encoded resource instance attributes: %s", err)
 		}
 
 		return result.ID, nil
 	}
 
-	logrus.Tracef("legacy attributes of resource instance: %s", resInstance.Current.AttrsFlat)
-
 	if resInstance.Current.AttrsFlat == nil {
+		log.WithField("attributes", resInstance.Current.AttrsFlat).
+			Debug(Pad("legacy attributes of resource instance"))
+
 		return "", fmt.Errorf("flat attribute map of resource instance is nil")
 	}
 

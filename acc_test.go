@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"os/exec"
 	"strings"
 	"testing"
@@ -33,10 +34,11 @@ func TestAcc_ConfirmDeletion(t *testing.T) {
 			userInput:               "YES\n",
 			expectResourceIsDeleted: true,
 			expectedLogs: []string{
-				"Are you sure you want to delete these resources (cannot be undone)? Only YES will be accepted.",
-				"Starting to delete resources",
-				"resource deleted",
+				"SHOWING RESOURCES THAT WOULD BE DELETED (DRY RUN)",
 				"TOTAL NUMBER OF RESOURCES THAT WOULD BE DELETED: 1",
+				"Are you sure you want to delete these resources (cannot be undone)? Only YES will be accepted.",
+				"STARTING TO DELETE RESOURCES",
+				"resource deleted",
 				"TOTAL NUMBER OF DELETED RESOURCES: 1",
 			},
 		},
@@ -44,11 +46,12 @@ func TestAcc_ConfirmDeletion(t *testing.T) {
 			name:      "confirmed with yes",
 			userInput: "yes\n",
 			expectedLogs: []string{
+				"SHOWING RESOURCES THAT WOULD BE DELETED (DRY RUN)",
 				"TOTAL NUMBER OF RESOURCES THAT WOULD BE DELETED: 1",
 				"Are you sure you want to delete these resources (cannot be undone)? Only YES will be accepted.",
 			},
 			unexpectedLogs: []string{
-				"Starting to delete resources",
+				"STARTING TO DELETE RESOURCES",
 				"TOTAL NUMBER OF DELETED RESOURCES:",
 			},
 		},
@@ -76,7 +79,8 @@ func TestAcc_ConfirmDeletion(t *testing.T) {
 			actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
 			aws.GetVpcById(t, actualVpcID, env.AWSRegion)
 
-			actualLogs := runBinary(t, terraformDir, tc.userInput)
+			logBuffer, err := runBinary(t, terraformDir, tc.userInput)
+			require.NoError(t, err)
 
 			if tc.expectResourceIsDeleted {
 				assertVpcDeleted(t, actualVpcID, env)
@@ -84,13 +88,17 @@ func TestAcc_ConfirmDeletion(t *testing.T) {
 				assertVpcExists(t, actualVpcID, env)
 			}
 
+			actualLogs := logBuffer.String()
+
 			for _, expectedLogEntry := range tc.expectedLogs {
-				assert.Contains(t, actualLogs.String(), expectedLogEntry)
+				assert.Contains(t, actualLogs, expectedLogEntry)
 			}
 
 			for _, unexpectedLogEntry := range tc.unexpectedLogs {
-				assert.NotContains(t, actualLogs.String(), unexpectedLogEntry)
+				assert.NotContains(t, actualLogs, unexpectedLogEntry)
 			}
+
+			fmt.Println(actualLogs)
 		})
 	}
 }
@@ -121,15 +129,21 @@ func TestAcc_AllResourcesAlreadyDeleted(t *testing.T) {
 	actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
 	aws.GetVpcById(t, actualVpcID, env.AWSRegion)
 
-	actualLogs := runBinary(t, terraformDir, "YES\n")
+	runBinary(t, terraformDir, "YES\n")
 
 	assertVpcDeleted(t, actualVpcID, env)
 
 	// run a second time
-	actualLogs = runBinary(t, terraformDir, "")
+	logBuffer, err := runBinary(t, terraformDir, "")
+	require.NoError(t, err)
 
-	assert.Contains(t, actualLogs.String(), "ALL RESOURCES HAVE ALREADY BEEN DELETED")
-	assert.NotContains(t, actualLogs.String(), "TOTAL NUMBER OF DELETED RESOURCES: ")
+	actualLogs := logBuffer.String()
+
+	assert.Contains(t, actualLogs, "ALL RESOURCES HAVE ALREADY BEEN DELETED")
+	assert.NotContains(t, actualLogs, "TOTAL NUMBER OF DELETED RESOURCES: ")
+
+	fmt.Println(actualLogs)
+
 }
 
 func TestAcc_DryRun(t *testing.T) {
@@ -148,17 +162,20 @@ func TestAcc_DryRun(t *testing.T) {
 			name: "with dry-run flag",
 			flag: "-dry",
 			expectedLogs: []string{
+				"SHOWING RESOURCES THAT WOULD BE DELETED (DRY RUN)",
 				"TOTAL NUMBER OF RESOURCES THAT WOULD BE DELETED: 1",
 			},
 			unexpectedLogs: []string{
-				"Starting to delete resources",
+				"STARTING TO DELETE RESOURCES",
 				"TOTAL NUMBER OF DELETED RESOURCES:",
 			},
 		},
 		{
 			name: "without dry-run flag",
 			expectedLogs: []string{
-				"Starting to delete resources",
+				"SHOWING RESOURCES THAT WOULD BE DELETED (DRY RUN)",
+				"TOTAL NUMBER OF RESOURCES THAT WOULD BE DELETED: 1",
+				"STARTING TO DELETE RESOURCES",
 				"resource deleted",
 				"TOTAL NUMBER OF DELETED RESOURCES: 1",
 			},
@@ -188,7 +205,8 @@ func TestAcc_DryRun(t *testing.T) {
 			actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
 			aws.GetVpcById(t, actualVpcID, env.AWSRegion)
 
-			actualLogs := runBinary(t, terraformDir, "YES\n")
+			logBuffer, err := runBinary(t, terraformDir, "YES\n", tc.flag)
+			require.NoError(t, err)
 
 			if tc.expectResourceIsDeleted {
 				assertVpcDeleted(t, actualVpcID, env)
@@ -196,13 +214,18 @@ func TestAcc_DryRun(t *testing.T) {
 				assertVpcExists(t, actualVpcID, env)
 			}
 
+			actualLogs := logBuffer.String()
+
 			for _, expectedLogEntry := range tc.expectedLogs {
-				assert.Contains(t, actualLogs.String(), expectedLogEntry)
+				assert.Contains(t, actualLogs, expectedLogEntry)
 			}
 
 			for _, unexpectedLogEntry := range tc.unexpectedLogs {
-				assert.NotContains(t, actualLogs.String(), unexpectedLogEntry)
+				assert.NotContains(t, actualLogs, unexpectedLogEntry)
 			}
+
+			fmt.Println(actualLogs)
+
 		})
 	}
 }
@@ -218,21 +241,30 @@ func TestAcc_Force(t *testing.T) {
 		expectedLogs            []string
 		unexpectedLogs          []string
 		expectResourceIsDeleted bool
+		expectedErrCode         int
 	}{
 		{
 			name:  "with force flag",
 			flags: []string{"-force"},
 			expectedLogs: []string{
-				"Starting to delete resources",
+				"STARTING TO DELETE RESOURCES",
 				"resource deleted",
 				"TOTAL NUMBER OF DELETED RESOURCES: 1",
+			},
+			unexpectedLogs: []string{
+				"SHOWING RESOURCES THAT WOULD BE DELETED (DRY RUN)",
+				"TOTAL NUMBER OF RESOURCES THAT WOULD BE DELETED: 1",
 			},
 			expectResourceIsDeleted: true,
 		},
 		{
 			name: "without force flag",
+			expectedLogs: []string{
+				"SHOWING RESOURCES THAT WOULD BE DELETED (DRY RUN)",
+				"TOTAL NUMBER OF RESOURCES THAT WOULD BE DELETED: 1",
+			},
 			unexpectedLogs: []string{
-				"Starting to delete resources",
+				"STARTING TO DELETE RESOURCES",
 				"resource deleted",
 				"TOTAL NUMBER OF DELETED RESOURCES:",
 			},
@@ -240,11 +272,15 @@ func TestAcc_Force(t *testing.T) {
 		{
 			name:  "with force and dry-run flag",
 			flags: []string{"-force", "-dry"},
+			expectedLogs: []string{
+				"-force and -dry flag cannot be used together",
+			},
 			unexpectedLogs: []string{
-				"Starting to delete resources",
+				"STARTING TO DELETE RESOURCES",
 				"resource deleted",
 				"TOTAL NUMBER OF DELETED RESOURCES:",
 			},
+			expectedErrCode: 1,
 		},
 	}
 	for _, tc := range tests {
@@ -270,7 +306,13 @@ func TestAcc_Force(t *testing.T) {
 			actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
 			aws.GetVpcById(t, actualVpcID, env.AWSRegion)
 
-			actualLogs := runBinary(t, terraformDir, "", tc.flags...)
+			logBuffer, err := runBinary(t, terraformDir, "yes\n", tc.flags...)
+
+			if tc.expectedErrCode > 0 {
+				require.EqualError(t, err, "exit status 1")
+			} else {
+				require.NoError(t, err)
+			}
 
 			if tc.expectResourceIsDeleted {
 				assertVpcDeleted(t, actualVpcID, env)
@@ -278,13 +320,17 @@ func TestAcc_Force(t *testing.T) {
 				assertVpcExists(t, actualVpcID, env)
 			}
 
+			actualLogs := logBuffer.String()
+
 			for _, expectedLogEntry := range tc.expectedLogs {
-				assert.Contains(t, actualLogs.String(), expectedLogEntry)
+				assert.Contains(t, actualLogs, expectedLogEntry)
 			}
 
 			for _, unexpectedLogEntry := range tc.unexpectedLogs {
-				assert.NotContains(t, actualLogs.String(), unexpectedLogEntry)
+				assert.NotContains(t, actualLogs, unexpectedLogEntry)
 			}
+
+			fmt.Println(actualLogs)
 		})
 	}
 }
@@ -422,7 +468,7 @@ func TestAcc_DeleteAwsIamRoleWithAttachedPolicy(t *testing.T) {
 	assertIamRoleDeleted(t, actualIamRole, env)
 }
 
-func runBinary(t *testing.T, terraformDir, userInput string, flags ...string) *bytes.Buffer {
+func runBinary(t *testing.T, terraformDir, userInput string, flags ...string) (*bytes.Buffer, error) {
 	defer gexec.CleanupBuildArtifacts()
 
 	compiledPath, err := gexec.Build(packagePath)
@@ -441,7 +487,6 @@ func runBinary(t *testing.T, terraformDir, userInput string, flags ...string) *b
 	p.Stderr = logBuffer
 
 	err = p.Run()
-	require.NoError(t, err)
 
-	return logBuffer
+	return logBuffer, err
 }

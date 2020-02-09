@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/sirupsen/logrus"
+	"github.com/apex/log"
 )
 
 type Resource struct {
@@ -25,43 +25,42 @@ func (r Resource) ID() string {
 
 // Delete deletes a Terraform resource via the corresponding Terraform Provider
 func (r Resource) Delete(dryRun bool) error {
-	logrus.Debugf("resource instance (type=%s, id=%s)", r.TerraformType, r.id)
-
-	if dryRun {
-		logrus.Printf("would try to delete resource (type=%s, id=%s)\n", r.TerraformType, r.id)
-		return nil
-	}
-
 	importResp := r.Provider.importResource(r.TerraformType, r.id)
 	if importResp.Diagnostics.HasErrors() {
 		return fmt.Errorf("failed to import resource: %s", importResp.Diagnostics.Err())
 	}
 
 	for _, resImp := range importResp.ImportedResources {
-		logrus.Tracef("imported resource state: %s", resImp.State.GoString())
+		log.WithField("state", resImp.State.GoString()).Debug(Pad("imported resource state"))
 
 		readResp := r.Provider.readResource(resImp)
 		if readResp.Diagnostics.HasErrors() {
 			return fmt.Errorf("failed to read current state of resource: %s", readResp.Diagnostics.Err())
 		}
 
-		logrus.Tracef("read resource state: %s", readResp.NewState.GoString())
+		log.WithField("state", readResp.NewState.GoString()).Debug(Pad("read resource state"))
 
-		resourceNotExists := readResp.NewState.IsNull()
-		if resourceNotExists {
-			return NotExistingError
+		resourceNotFound := readResp.NewState.IsNull()
+		if resourceNotFound {
+			return fmt.Errorf("resource found in state doesn't exist anymore")
+		}
+
+		if dryRun {
+			log.WithField("id", r.id).Warn(Pad(r.TerraformType))
+
+			return nil
 		}
 
 		respApply := r.Provider.destroy(r.TerraformType, readResp.NewState)
 		if respApply.Diagnostics.HasErrors() {
-			logrus.WithError(respApply.Diagnostics.Err()).Debugf(
-				"failed to delete resource: %s", respApply.Diagnostics.Err())
-			return RetryableError
+			log.WithError(respApply.Diagnostics.Err()).Debug(Pad("failed to delete resource"))
+
+			return RetryableError(respApply.Diagnostics.Err(), r)
 		}
 
-		logrus.Infof("deleted resource (type=%s, id=%s)", r.Type(), r.ID())
+		log.WithField("state", respApply.NewState.GoString()).Debug(Pad("new resource state after apply"))
 
-		logrus.Tracef("new resource state after apply: %s", respApply.NewState.GoString())
+		log.WithFields(log.Fields{"type": r.TerraformType, "id": r.id}).Error(Pad("resource deleted"))
 	}
 
 	return nil
@@ -73,26 +72,25 @@ type DeletableResource interface {
 	ID() string
 }
 
-// Delete retries to delete resources that depend on each other
-//
-// Per iteration (run), at least one resource must be successfully deleted to retry deleting in a next run
-// (until all resources are deleted or some deletions have permanently failed).
-func Delete(resources []DeletableResource, parallel int) int {
-	logrus.Debug("starting deletion run")
-
+// Delete erases a given list of resources, which might depend on each other.
+// If at least one resource is successfully deleted per run (iteration of the list), the remaining,
+// failed resources will be retried in a next run (until all resources are deleted or
+// some deletions have permanently failed).
+func Delete(resources []DeletableResource, dryRun bool, parallel int) int {
+	numOfResourcesToDelete := len(resources)
 	numOfDeletedResources := 0
 
-	var resourcesToRetry []DeletableResource
+	var retryableResourceErrors []RetryResourceError
 
-	var numOfResources = len(resources)
+	jobQueue := make(chan DeletableResource, numOfResourcesToDelete)
 
-	jobQueue := make(chan DeletableResource, numOfResources)
-
-	workerResults := make(chan workerResult, numOfResources)
+	workerResults := make(chan workerResult, numOfResourcesToDelete)
 
 	for workerID := 1; workerID <= parallel; workerID++ {
-		go worker(workerID, jobQueue, workerResults)
+		go worker(workerID, dryRun, jobQueue, workerResults)
 	}
+
+	log.Debug("start distributing resources to workers")
 
 	for _, r := range resources {
 		jobQueue <- r
@@ -100,57 +98,81 @@ func Delete(resources []DeletableResource, parallel int) int {
 
 	close(jobQueue)
 
-	for i := 1; i <= numOfResources; i++ {
-		wr := <-workerResults
-		logrus.Debugf("processing worker result: %+v:", wr)
+	for i := 1; i <= numOfResourcesToDelete; i++ {
+		result := <-workerResults
 
-		numOfDeletedResources += wr.deletionCount
+		if result.resourceHasBeenDeleted {
+			numOfDeletedResources++
 
-		if wr.resourceToRetry != nil {
-			resourcesToRetry = append(resourcesToRetry, wr.resourceToRetry)
+			continue
+		}
+
+		if result.Err != nil {
+			retryableResourceErrors = append(retryableResourceErrors, *result.Err)
 		}
 	}
 
-	if len(resourcesToRetry) > 0 && numOfDeletedResources > 0 {
-		logrus.Debugf("retrying to delete the following resources: %+v", resourcesToRetry)
+	if len(retryableResourceErrors) > 0 && numOfDeletedResources > 0 {
+		var resourcesToRetry []DeletableResource
+		for _, retryErr := range retryableResourceErrors {
+			resourcesToRetry = append(resourcesToRetry, retryErr.Resource)
+		}
 
-		numOfDeletedResources += Delete(resourcesToRetry, parallel)
+		numOfDeletedResources += Delete(resourcesToRetry, dryRun, parallel)
+	}
+
+	if len(retryableResourceErrors) > 0 && numOfDeletedResources == 0 {
+		LogTitle("failed to delete the following resources (retries exceeded)")
+
+		for _, err := range retryableResourceErrors {
+			log.WithError(err).WithField("id", err.Resource.ID()).Warn(Pad(err.Resource.Type()))
+		}
 	}
 
 	return numOfDeletedResources
 }
 
 type workerResult struct {
-	deletionCount   int
-	resourceToRetry DeletableResource
+	resourceHasBeenDeleted bool
+	// if set, it is worth retrying to delete this resource
+	Err *RetryResourceError
 }
 
-func worker(id int, resources <-chan DeletableResource, result chan<- workerResult) {
+func worker(id int, dryRun bool, resources <-chan DeletableResource, result chan<- workerResult) {
 	for r := range resources {
-		logrus.Debugf("worker: %d, start deleting resource (type=%s, id=%s)", id, r.Type(), r.ID())
+		log.WithFields(log.Fields{
+			"worker_id": id,
+			"type":      r.Type(),
+			"id":        r.ID(),
+		}).Debug(Pad("worker starts deleting resource"))
 
 		err := r.Delete(dryRun)
 		if err != nil {
-			switch err {
-			case RetryableError:
-				logrus.Infof("will retry deleting resource (type=%s, id=%s)", r.Type(), r.ID())
-				logrus.WithError(err).Debugf("will retry deleting resource (type=%s, id=%s)", r.Type(), r.ID())
+			switch err := err.(type) {
+			case *RetryResourceError:
+				log.WithFields(log.Fields{
+					"type": r.Type(),
+					"id":   r.ID(),
+				}).Info(Pad("will retry to delete resource"))
 
-				result <- workerResult{resourceToRetry: r}
+				result <- workerResult{
+					Err: err,
+				}
 
-				continue
-			case NotExistingError:
-				logrus.Infof("resource found in state has already been deleted (type=%s, id=%s)", r.Type(), r.ID())
 			default:
-				logrus.Infof("unable to delete resource (type=%s, id=%s)", r.Type(), r.ID())
-				logrus.WithError(err).Debugf("unable to delete resource (type=%s, id=%s)", r.Type(), r.ID())
-			}
+				log.WithError(err).WithFields(log.Fields{
+					"type": r.Type(),
+					"id":   r.ID(),
+				}).Debug(Pad("unable to delete resource"))
 
-			result <- workerResult{deletionCount: 0}
+				result <- workerResult{}
+			}
 
 			continue
 		}
 
-		result <- workerResult{deletionCount: 1}
+		result <- workerResult{
+			resourceHasBeenDeleted: true,
+		}
 	}
 }
