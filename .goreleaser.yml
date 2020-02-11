@@ -1,10 +1,24 @@
 builds:
-  - ldflags: -s -w -extldflags "-static"
-    env:
-      - CGO_ENABLED=0
-    binary: terradozer
+  - binary: terradozer
     goos:
       - darwin
+#      - windows coming soon
       - linux
+      - freebsd
     goarch:
       - amd64
+      - 386
+    env:
+      - CGO_ENABLED=0
+    ldflags: -s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}}
+
+archives:
+  - format: tar.gz
+    wrap_in_directory: true
+    format_overrides:
+      - goos: windows
+        format: zip
+    name_template: '{{ .Binary }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}'
+    files:
+      - LICENSE.md
+      - README.md

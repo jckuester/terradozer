@@ -21,6 +21,7 @@ var (
 	logDebug    bool
 	pathToState string
 	parallel    int
+	showVersion bool
 )
 
 //nolint:gochecknoinits
@@ -30,6 +31,7 @@ func init() {
 	flag.BoolVar(&logDebug, "debug", false, "Enable debug logging")
 	flag.StringVar(&pathToState, "state", "terraform.tfstate", "Path to a Terraform state file")
 	flag.IntVar(&parallel, "parallel", 10, "Limit the number of concurrent delete operations")
+	flag.BoolVar(&showVersion, "version", false, "Show application version")
 }
 
 func main() {
@@ -41,12 +43,20 @@ func mainExitCode() int {
 
 	log.SetHandler(cli.Default)
 
+	fmt.Println()
+	defer fmt.Println()
+
 	if logDebug {
 		log.SetLevel(log.DebugLevel)
 	}
 
 	// discard TRACE logs of GRPCProvider
 	stdlog.SetOutput(ioutil.Discard)
+
+	if showVersion {
+		fmt.Println(BuildVersionString())
+		return 0
+	}
 
 	if force && dryRun {
 		log.Error("-force and -dry flag cannot be used together")
