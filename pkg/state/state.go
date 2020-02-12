@@ -1,4 +1,5 @@
-package main
+// Package state provides primitives to list all resources and providers in a Terraform state file.
+package state
 
 import (
 	"encoding/json"
@@ -6,17 +7,24 @@ import (
 	"os"
 	"sort"
 
+	"github.com/jckuester/terradozer/pkg/resource"
+
+	"github.com/jckuester/terradozer/internal"
+	"github.com/jckuester/terradozer/pkg/provider"
+
 	"github.com/apex/log"
 	"github.com/hashicorp/terraform/addrs"
 	"github.com/hashicorp/terraform/states"
 	"github.com/hashicorp/terraform/states/statefile"
 )
 
+// State represents a Terraform state.
 type State struct {
 	state *states.State
 }
 
-func NewState(path string) (*State, error) {
+// New creates a state from a given path to a Terraform state file.
+func New(path string) (*State, error) {
 	stateFile, err := getStateFromPath(path)
 	if err != nil {
 		return nil, err
@@ -43,11 +51,12 @@ func getStateFromPath(path string) (*statefile.File, error) {
 	return stateFile, nil
 }
 
-// ProviderNames returns a list of all provider names found in the state (e.g., "aws", "google")
+// ProviderNames returns a list of all provider names (e.g., "aws", "google") in the state.
+// The result of provider names is deduplicated.
 func (s *State) ProviderNames() []string {
 	var providers []string
 
-	log.WithField("addresses", s.state.ProviderAddrs()).Debug(Pad("providers found in state"))
+	log.WithField("addresses", s.state.ProviderAddrs()).Debug(internal.Pad("providers found in state"))
 
 	for _, pAddr := range s.state.ProviderAddrs() {
 		providers = append(providers, pAddr.ProviderConfig.StringCompact())
@@ -74,12 +83,16 @@ func removeDuplicates(elements []string) []string {
 	return result
 }
 
-// Resources returns all the resources (not data sources) in a state for the given providers
-func (s *State) Resources(providers map[string]*TerraformProvider) ([]DeletableResource, error) {
-	var resources []DeletableResource
+// Resources returns a list of all destroyable resources in the state that are managed by one of the given providers.
+//
+// Data sources are not returned as these are managed outside the scope of the state and
+// therefore shouldn't be destroyed.
+func (s *State) Resources(providers map[string]*provider.TerraformProvider) ([]resource.DestroyableResource, error) {
+	var resources []resource.DestroyableResource
 
 	for _, resAddr := range lookupAllResourceInstanceAddrs(s.state) {
-		log.WithField("absolute_address", resAddr.String()).Debug(Pad("looked up resource instance address"))
+		log.WithField("absolute_address", resAddr.String()).
+			Debug(internal.Pad("looked up resource instance address"))
 
 		resInstance := s.state.ResourceInstance(resAddr)
 
@@ -92,7 +105,7 @@ func (s *State) Resources(providers map[string]*TerraformProvider) ([]DeletableR
 			log.WithFields(log.Fields{
 				"mode": resAddr.Resource.Resource.Mode,
 				"type": resAddr.Resource.Resource.Type,
-				"id":   resID}).Debug(Pad("ignoring non-managed resource"))
+				"id":   resID}).Debug(internal.Pad("ignoring non-managed resource"))
 
 			continue
 		}
@@ -101,30 +114,25 @@ func (s *State) Resources(providers map[string]*TerraformProvider) ([]DeletableR
 
 		p, ok := providers[providerName]
 		if !ok {
-			log.WithField("name", providerName).Debug(Pad("Terraform provider not found in providers list"))
+			log.WithField("name", providerName).Debug(internal.Pad("Terraform provider not found in providers list"))
 
 			continue
 		}
 
-		r := Resource{
-			TerraformType: resAddr.Resource.Resource.Type,
-			Provider:      p,
-			id:            resID,
-		}
-
-		resources = append(resources, r)
+		resources = append(resources, resource.New(resAddr.Resource.Resource.Type, resID, p))
 	}
 
 	return resources, nil
 }
 
-type ResourceID struct {
+// resourceID represents the ID attribute of a Terraform resource.
+type resourceID struct {
 	ID string `json:"id"`
 }
 
-// getResourceID looks up the resource ID amongst all resource attributes
+// getResourceID looks up the resource ID amongst all resource attributes.
 func getResourceID(resInstance *states.ResourceInstance) (string, error) {
-	var result ResourceID
+	var result resourceID
 
 	if !resInstance.HasCurrent() {
 		return "", fmt.Errorf("resource instance has no current object")
@@ -134,7 +142,7 @@ func getResourceID(resInstance *states.ResourceInstance) (string, error) {
 		err := json.Unmarshal(resInstance.Current.AttrsJSON, &result)
 		if err != nil {
 			log.WithField("attributes", resInstance.Current.AttrsJSON).
-				Debug(Pad("JSON-encoded attributes of resource instance"))
+				Debug(internal.Pad("JSON-encoded attributes of resource instance"))
 
 			return "", fmt.Errorf("failed to unmarshal JSON-encoded resource instance attributes: %s", err)
 		}
@@ -144,7 +152,7 @@ func getResourceID(resInstance *states.ResourceInstance) (string, error) {
 
 	if resInstance.Current.AttrsFlat == nil {
 		log.WithField("attributes", resInstance.Current.AttrsFlat).
-			Debug(Pad("legacy attributes of resource instance"))
+			Debug(internal.Pad("legacy attributes of resource instance"))
 
 		return "", fmt.Errorf("flat attribute map of resource instance is nil")
 	}

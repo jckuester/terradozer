@@ -14,12 +14,12 @@ resource "aws_vpc" "test" {
 }
 
 resource "aws_iam_role" "test" {
-  name = "test_role"
+  name = var.name
 
   assume_role_policy = data.aws_iam_policy_document.role.json
 
   tags = {
-    tag-key = "tag-value"
+    tag-key = var.name
   }
 }
 
@@ -35,9 +35,8 @@ data "aws_iam_policy_document" "role" {
 }
 
 resource "aws_iam_policy" "test" {
-  name        = "test_policy"
+  name        = var.name
   path        = "/"
-  description = "My test policy"
 
   policy = data.aws_iam_policy_document.policy.json
 }

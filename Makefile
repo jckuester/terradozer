@@ -6,6 +6,7 @@ setup: ## Install build, test, and lint dependencies
 	curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | sh -s ${GOLANGCI_LINT_VERSION}
 	go install github.com/golang/mock/mockgen
 	go install github.com/hashicorp/terraform
+	curl -sSfL https://raw.githubusercontent.com/jckuester/go-acc/master/install.sh | sh -s v0.2.1
 
 .PHONY: lint
 lint: ## Run some static code analysis
@@ -34,7 +35,7 @@ test: ## Run unit tests
 .PHONY: test-all
 test-all: ## Run tests (including acceptance and integration tests)
 	go clean -testcache ${PKG_LIST}
-	go test -v -p 1 -race -failfast -coverprofile=coverage.txt -covermode=atomic ${PKG_LIST}
+	./bin/go-acc ${PKG_LIST} -- -v -p 1 -race -failfast -timeout 20m
 
 .PHONY: build
 build: ## Build binary

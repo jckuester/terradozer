@@ -1,7 +1,7 @@
 package main
 
-//go:generate mockgen -source=provider.go -destination=provider_mock_test.go -package=main
-//go:generate mockgen -source=resource.go -destination=resource_mock_test.go -package=main
+//go:generate mockgen -source=pkg/provider/provider.go -destination=pkg/resource/provider_mock_test.go -package=resource
+//go:generate mockgen -source=pkg/resource/resource.go -destination=pkg/resource/resource_mock_test.go -package=resource
 
 import (
 	"flag"
@@ -10,9 +10,12 @@ import (
 	stdlog "log"
 	"os"
 
-	"github.com/apex/log/handlers/cli"
-
 	"github.com/apex/log"
+	"github.com/apex/log/handlers/cli"
+	"github.com/jckuester/terradozer/internal"
+	"github.com/jckuester/terradozer/pkg/provider"
+	"github.com/jckuester/terradozer/pkg/resource"
+	"github.com/jckuester/terradozer/pkg/state"
 )
 
 var (
@@ -21,7 +24,7 @@ var (
 	logDebug    bool
 	pathToState string
 	parallel    int
-	showVersion bool
+	version     bool
 )
 
 //nolint:gochecknoinits
@@ -31,7 +34,7 @@ func init() {
 	flag.BoolVar(&logDebug, "debug", false, "Enable debug logging")
 	flag.StringVar(&pathToState, "state", "terraform.tfstate", "Path to a Terraform state file")
 	flag.IntVar(&parallel, "parallel", 10, "Limit the number of concurrent delete operations")
-	flag.BoolVar(&showVersion, "version", false, "Show application version")
+	flag.BoolVar(&version, "version", false, "Show application version")
 }
 
 func main() {
@@ -53,8 +56,8 @@ func mainExitCode() int {
 	// discard TRACE logs of GRPCProvider
 	stdlog.SetOutput(ioutil.Discard)
 
-	if showVersion {
-		fmt.Println(BuildVersionString())
+	if version {
+		fmt.Println(internal.BuildVersionString())
 		return 0
 	}
 
@@ -63,76 +66,52 @@ func mainExitCode() int {
 		return 1
 	}
 
-	state, err := NewState(pathToState)
+	tfstate, err := state.New(pathToState)
 	if err != nil {
 		log.WithError(err).Error("failed to get Terraform state")
 		return 1
 	}
 
-	LogTitle(Pad("reading state"))
-	log.WithField("file", pathToState).Info(Pad("using state"))
+	internal.LogTitle("reading state")
+	log.WithField("file", pathToState).Info(internal.Pad("using state"))
 
-	providers, err := InitProviders(state.ProviderNames())
+	providers, err := provider.InitProviders(tfstate.ProviderNames())
 	if err != nil {
 		log.WithError(err).Error("failed to initialize Terraform providers")
 		return 1
 	}
 
-	resources, err := state.Resources(providers)
+	resources, err := tfstate.Resources(providers)
 	if err != nil {
 		log.WithError(err).Error("failed to get resources from Terraform state")
 		return 1
 	}
 
 	if !force {
-		LogTitle("showing resources that would be deleted (dry run)")
+		internal.LogTitle("showing resources that would be deleted (dry run)")
 
 		// always show the resources that would be affected before deleting anything
-		numDeletedResources := Delete(resources, true, parallel)
+		numDeletedResources := resource.DestroyResources(resources, true, parallel)
 
 		if numDeletedResources == 0 {
-			LogTitle("all resources have already been deleted")
+			internal.LogTitle("all resources have already been deleted")
 			return 0
 		}
 
-		LogTitle(fmt.Sprintf("total number of resources that would be deleted: %d", numDeletedResources))
+		internal.LogTitle(fmt.Sprintf("total number of resources that would be deleted: %d", numDeletedResources))
 	}
 
 	if !dryRun {
-		if !userConfirmedDeletion(force) {
+		if !internal.UserConfirmedDeletion(os.Stdin, force) {
 			return 0
 		}
 
-		LogTitle("Starting to delete resources")
+		internal.LogTitle("Starting to delete resources")
 
-		numDeletedResources := Delete(resources, false, parallel)
+		numDeletedResources := resource.DestroyResources(resources, false, parallel)
 
-		LogTitle(fmt.Sprintf("total number of deleted resources: %d", numDeletedResources))
+		internal.LogTitle(fmt.Sprintf("total number of deleted resources: %d", numDeletedResources))
 	}
 
 	return 0
-}
-
-// userConfirmedDeletion asks the user to confirm deletion of resources
-func userConfirmedDeletion(force bool) bool {
-	if force {
-		LogTitle("user will not be asked for confirmation (force mode)")
-		return true
-	}
-
-	log.Info("Are you sure you want to delete these resources (cannot be undone)? Only YES will be accepted.")
-	fmt.Print(fmt.Sprintf("%23v", "Enter a value: "))
-
-	var response string
-
-	_, err := fmt.Scanln(&response)
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-
-	if response == "YES" {
-		return true
-	}
-
-	return false
 }

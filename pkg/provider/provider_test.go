@@ -1,4 +1,4 @@
-package main
+package provider_test
 
 import (
 	"crypto/sha256"
@@ -9,6 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jckuester/terradozer/pkg/provider"
+	"github.com/jckuester/terradozer/test"
+
 	"github.com/gruntwork-io/terratest/modules/aws"
 	"github.com/gruntwork-io/terratest/modules/terraform"
 	"github.com/hashicorp/terraform/providers"
@@ -17,7 +20,7 @@ import (
 	"github.com/zclconf/go-cty/cty"
 )
 
-func TestTerraformProvider_InstallProvider(t *testing.T) {
+func TestInstall(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test.")
 	}
@@ -44,7 +47,7 @@ func TestTerraformProvider_InstallProvider(t *testing.T) {
 			err := os.RemoveAll(".terradozer")
 			require.NoError(t, err)
 
-			p, err := installProvider(tc.providerName, tc.constraint, true)
+			p, err := provider.Install(tc.providerName, tc.constraint, true)
 			require.NoError(t, err)
 
 			if tc.expectedFile != "" {
@@ -62,7 +65,7 @@ func TestTerraformProvider_InstallProvider(t *testing.T) {
 	}
 }
 
-func TestTerraformProvider_InstallProvider_Cache(t *testing.T) {
+func TestInstall_Cache(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test.")
 	}
@@ -98,7 +101,7 @@ func TestTerraformProvider_InstallProvider_Cache(t *testing.T) {
 			err := os.RemoveAll(".terradozer")
 			require.NoError(t, err)
 
-			p, err := installProvider(tc.providerName, tc.constraint, tc.useCache)
+			p, err := provider.Install(tc.providerName, tc.constraint, tc.useCache)
 			require.NoError(t, err)
 			assert.Equal(t, tc.providerName, p.Name)
 			assert.Equal(t, tc.constraint, p.Version.MustParse().String())
@@ -117,7 +120,7 @@ func TestTerraformProvider_InstallProvider_Cache(t *testing.T) {
 				}
 			}
 
-			p2, err := installProvider(tc.providerName, tc.constraint, tc.useCache)
+			p2, err := provider.Install(tc.providerName, tc.constraint, tc.useCache)
 			require.NoError(t, err)
 			assert.Equal(t, tc.providerName, p2.Name)
 			assert.Equal(t, tc.constraint, p2.Version.MustParse().String())
@@ -138,9 +141,9 @@ func TestTerraformProvider_ImportResource(t *testing.T) {
 		t.Skip("Skipping integration test.")
 	}
 
-	env := InitEnv(t)
+	env := test.InitEnv(t)
 
-	terraformDir := "./test-fixtures/single-resource"
+	terraformDir := "../../test/test-fixtures/single-resource"
 
 	terraformOptions := &terraform.Options{
 		TerraformDir: terraformDir,
@@ -159,11 +162,10 @@ func TestTerraformProvider_ImportResource(t *testing.T) {
 	actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
 	aws.GetVpcById(t, actualVpcID, env.AWSRegion)
 
-	providers, err := InitProviders([]string{"aws"})
+	provider, err := provider.Init("aws")
 	require.NoError(t, err)
-	require.Len(t, providers, 1)
 
-	importResp := providers["aws"].importResource("aws_vpc", actualVpcID)
+	importResp := provider.ImportResource("aws_vpc", actualVpcID)
 	assert.NoError(t, importResp.Diagnostics.Err())
 	assert.Len(t, importResp.ImportedResources, 1)
 
@@ -195,9 +197,9 @@ func TestTerraformProvider_ReadResource(t *testing.T) {
 		t.Skip("Skipping integration test.")
 	}
 
-	env := InitEnv(t)
+	env := test.InitEnv(t)
 
-	terraformDir := "./test-fixtures/single-resource"
+	terraformDir := "../../test/test-fixtures/single-resource"
 
 	testName := "terradozer"
 
@@ -218,11 +220,10 @@ func TestTerraformProvider_ReadResource(t *testing.T) {
 	actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
 	aws.GetVpcById(t, actualVpcID, env.AWSRegion)
 
-	p, err := InitProviders([]string{"aws"})
+	p, err := provider.Init("aws")
 	require.NoError(t, err)
-	require.Len(t, p, 1)
 
-	readResp := p["aws"].readResource(providers.ImportedResource{
+	readResp := p.ReadResource(providers.ImportedResource{
 		TypeName: "aws_vpc",
 		State: cty.ObjectVal(map[string]cty.Value{
 			"arn":                              cty.NullVal(cty.String),
@@ -281,16 +282,15 @@ func TestInitProviders(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			actualProviders, err := InitProviders(tc.providerNames)
+			actualProviders, err := provider.InitProviders(tc.providerNames)
 
 			if tc.expectedErrMsg != "" {
-				require.Error(t, err)
 				assert.EqualError(t, err, tc.expectedErrMsg)
 			} else {
 				require.NoError(t, err)
 
 				for pName, p := range actualProviders {
-					assert.NotNil(t, p.provider)
+					assert.NotNil(t, p)
 					assert.Contains(t, tc.expectedProviderNames, pName)
 				}
 			}

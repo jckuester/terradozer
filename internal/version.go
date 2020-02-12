@@ -1,4 +1,4 @@
-package main
+package internal
 
 import (
 	"fmt"
@@ -6,13 +6,13 @@ import (
 )
 
 var (
-	appVersion = "dev"
-	commit     = ""
-	date       = ""
+	version = "dev"
+	commit  = ""
+	date    = ""
 )
 
 func BuildVersionString() string {
-	var result = fmt.Sprintf("version: %s", appVersion)
+	var result = fmt.Sprintf("version: %s", version)
 
 	if commit != "" {
 		result = fmt.Sprintf("%s\ncommit: %s", result, commit)

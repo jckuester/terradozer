@@ -1,10 +1,13 @@
-package main
+// Package provider implements a client to call import, read, and destroy on any Terraform provider Plugin via GRPC.
+package provider
 
 import (
 	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
+
+	"github.com/jckuester/terradozer/internal"
 
 	"github.com/apex/log"
 	"github.com/hashicorp/go-hclog"
@@ -14,13 +17,12 @@ import (
 	"github.com/hashicorp/terraform/plugin"
 	"github.com/hashicorp/terraform/plugin/discovery"
 	"github.com/hashicorp/terraform/providers"
-	"github.com/hashicorp/terraform/tfdiags"
 	"github.com/mitchellh/cli"
 	"github.com/zclconf/go-cty/cty"
 )
 
-// Provider is the interface that every Terraform Provider Plugin implements
-type Provider interface {
+// provider is the interface that every Terraform Provider Plugin implements.
+type provider interface {
 	Configure(providers.ConfigureRequest) providers.ConfigureResponse
 	ReadResource(providers.ReadResourceRequest) providers.ReadResourceResponse
 	ApplyResourceChange(providers.ApplyResourceChangeRequest) providers.ApplyResourceChangeResponse
@@ -28,20 +30,16 @@ type Provider interface {
 }
 
 type TerraformProvider struct {
-	provider Provider
+	provider
 }
 
-func newTerraformProvider(path string, logDebug bool) (*TerraformProvider, error) {
+// Launch launches a Provider Plugin executable to provide the RPC server for this plugin.
+func Launch(pathToPluginExecutable string) (*TerraformProvider, error) {
 	m := discovery.PluginMeta{
-		Path: path,
+		Path: pathToPluginExecutable,
 	}
 
-	hcLoglevel := hclog.Error
-	if logDebug {
-		hcLoglevel = hclog.Debug
-	}
-
-	p, err := providerFactory(m, hcLoglevel)()
+	p, err := providerFactory(m, hclog.Error)()
 	if err != nil {
 		return nil, err
 	}
@@ -91,24 +89,32 @@ func clientConfig(m discovery.PluginMeta, loglevel hclog.Level) *goPlugin.Client
 	}
 }
 
-func (p TerraformProvider) configure(config cty.Value) tfdiags.Diagnostics {
+// Configure configures a provider.
+func (p TerraformProvider) Configure(config cty.Value) error {
 	respConf := p.provider.Configure(providers.ConfigureRequest{
 		Config: config,
 	})
 
-	return respConf.Diagnostics
+	return respConf.Diagnostics.Err()
 }
 
-func (p TerraformProvider) importResource(resType string, resID string) providers.ImportResourceStateResponse {
-	response := p.provider.ImportResourceState(providers.ImportResourceStateRequest{
-		TypeName: resType,
+// ImportResource imports a Terraform resource by type and ID.
+// Terraform Type and ID is the minimal information needed to uniquely identify a resource.
+// For example, call:
+//   ImportResource("aws_instance", "i-1234567890abcdef0")
+// The result is a resource which has only its ID set (all other attributes are empty).
+func (p TerraformProvider) ImportResource(terraformType string, resID string) providers.ImportResourceStateResponse {
+	response := p.ImportResourceState(providers.ImportResourceStateRequest{
+		TypeName: terraformType,
 		ID:       resID,
 	})
 
 	return response
 }
 
-func (p TerraformProvider) readResource(r providers.ImportedResource) providers.ReadResourceResponse {
+// ReadResource refreshes and sets all attributes of an imported resource.
+// This function is used to populate all attributes of a resource after import.
+func (p TerraformProvider) ReadResource(r providers.ImportedResource) providers.ReadResourceResponse {
 	response := p.provider.ReadResource(providers.ReadResourceRequest{
 		TypeName:   r.TypeName,
 		PriorState: r.State,
@@ -118,9 +124,12 @@ func (p TerraformProvider) readResource(r providers.ImportedResource) providers.
 	return response
 }
 
-func (p TerraformProvider) destroy(resType string, currentState cty.Value) providers.ApplyResourceChangeResponse {
-	response := p.provider.ApplyResourceChange(providers.ApplyResourceChangeRequest{
-		TypeName:     resType,
+// DestroyResource destroys a resource.
+// This function requires the current state of a resource as input (fetched via ReadResource).
+func (p TerraformProvider) DestroyResource(
+	terraformType string, currentState cty.Value) providers.ApplyResourceChangeResponse {
+	response := p.ApplyResourceChange(providers.ApplyResourceChangeRequest{
+		TypeName:     terraformType,
 		PriorState:   enableForceDestroyAttributes(currentState),
 		PlannedState: cty.NullVal(cty.DynamicPseudoType),
 		Config:       cty.NullVal(cty.DynamicPseudoType),
@@ -133,7 +142,7 @@ func (p TerraformProvider) destroy(resType string, currentState cty.Value) provi
 // to be able to successfully delete some resources
 // (eg. a non-empty S3 bucket or a AWS IAM role with attached policies).
 //
-// Note: this is at the moment AWS specific
+// Note: this function is currently AWS specific.
 func enableForceDestroyAttributes(state cty.Value) cty.Value {
 	stateWithDestroyAttrs := map[string]cty.Value{}
 
@@ -152,14 +161,16 @@ func enableForceDestroyAttributes(state cty.Value) cty.Value {
 	return cty.ObjectVal(stateWithDestroyAttrs)
 }
 
-// installProvider downloads the provider plugin binary
-func installProvider(providerName, constraint string, useCache bool) (discovery.PluginMeta, error) {
+// Install installs a Terraform Provider Plugin binary with a given version.
+// For example, call:
+//   Install("aws", "2.43.0", true)
+func Install(providerName, versionConstraint string, cacheBinary bool) (discovery.PluginMeta, error) {
 	installDir := ".terradozer"
 
 	providerInstaller := &discovery.ProviderInstaller{
 		Dir: installDir,
 		Cache: func() discovery.PluginCache {
-			if useCache {
+			if cacheBinary {
 				return discovery.NewLocalPluginCache(installDir + "/cache")
 			}
 			return nil
@@ -175,8 +186,8 @@ func installProvider(providerName, constraint string, useCache bool) (discovery.
 
 	providerConstraint := discovery.AllVersions
 
-	if constraint != "" {
-		constraints, err := version.NewConstraint(constraint)
+	if versionConstraint != "" {
+		constraints, err := version.NewConstraint(versionConstraint)
 		if err != nil {
 			return discovery.PluginMeta{}, fmt.Errorf("failed to parse provider version constraint: %s", err)
 		}
@@ -195,47 +206,60 @@ func installProvider(providerName, constraint string, useCache bool) (discovery.
 	return meta, nil
 }
 
-// InitProviders installs, initializes (starts the plugin binary process), and configures
-// each provider in the given list of provider names
+// Init installs, launches (i.e., starts the plugin binary process), and configures
+// a given Terraform Provider by name with a default configuration.
+//
+// Note: Init() combines calls to the functions Install(), Launch(), and Configure().
+func Init(providerName string) (*TerraformProvider, error) {
+	pConfig, pVersion, err := config(providerName)
+	if err != nil {
+		log.WithField("name", providerName).Info(internal.Pad("ignoring resources of (yet) unsupported provider"))
+		return nil, nil
+	}
+
+	metaPlugin, err := Install(providerName, pVersion, true)
+	if err != nil {
+		return nil, fmt.Errorf("failed to install provider (%s): %s", providerName, err)
+	}
+
+	log.WithFields(log.Fields{
+		"name":    metaPlugin.Name,
+		"version": metaPlugin.Version,
+	}).Info(internal.Pad("downloaded and installed provider"))
+
+	p, err := Launch(metaPlugin.Path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to launch provider (%s): %s", metaPlugin.Path, err)
+	}
+
+	err = p.Configure(pConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to configure provider (name=%s, version=%s): %s",
+			metaPlugin.Name, metaPlugin.Version, err)
+	}
+
+	log.WithFields(log.Fields{
+		"name":    metaPlugin.Name,
+		"version": metaPlugin.Version,
+	}).Info(internal.Pad("configured provider"))
+
+	return p, nil
+}
+
+// InitProviders installs, launches (i.e., starts the plugin binary process), and configures
+// a given list of Terraform Providers by name with a default configuration.
 func InitProviders(providerNames []string) (map[string]*TerraformProvider, error) {
 	providers := map[string]*TerraformProvider{}
 
 	for _, pName := range providerNames {
-		log.WithField("name", pName).Debug(Pad("starting to initialize provider"))
-
-		pConfig, pVersion, err := ProviderConfig(pName)
+		p, err := Init(pName)
 		if err != nil {
-			log.WithField("name", pName).Info(Pad("ignoring resources of (yet) unsupported provider"))
-			continue
+			return nil, err
 		}
 
-		metaPlugin, err := installProvider(pName, pVersion, true)
-		if err != nil {
-			return nil, fmt.Errorf("failed to install provider (%s): %s", pName, err)
+		if p != nil {
+			providers[pName] = p
 		}
-
-		log.WithFields(log.Fields{
-			"name":    metaPlugin.Name,
-			"version": metaPlugin.Version,
-		}).Info(Pad("downloaded and installed provider"))
-
-		p, err := newTerraformProvider(metaPlugin.Path, logDebug)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load Terraform provider (%s): %s", metaPlugin.Path, err)
-		}
-
-		tfDiagnostics := p.configure(pConfig)
-		if tfDiagnostics.HasErrors() {
-			return nil, fmt.Errorf("failed to configure provider (name=%s, version=%s): %s",
-				metaPlugin.Name, metaPlugin.Version, tfDiagnostics.Err())
-		}
-
-		log.WithFields(log.Fields{
-			"name":    metaPlugin.Name,
-			"version": metaPlugin.Version,
-		}).Info(Pad("configured provider"))
-
-		providers[pName] = p
 	}
 
 	return providers, nil

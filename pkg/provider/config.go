@@ -1,4 +1,4 @@
-package main
+package provider
 
 import (
 	"fmt"
@@ -7,8 +7,8 @@ import (
 	"github.com/zclconf/go-cty/cty"
 )
 
-// ProviderConfig returns the provider config by name (e.g. aws)
-func ProviderConfig(name string) (cty.Value, string, error) {
+// config returns a default configuration for the Terraform Provider given by name (e.g. "aws").
+func config(name string) (cty.Value, string, error) {
 	switch name {
 	case "aws":
 		return awsProviderConfig(), "2.43.0", nil
@@ -17,7 +17,7 @@ func ProviderConfig(name string) (cty.Value, string, error) {
 	}
 }
 
-// awsProviderConfig returns a config for the Terraform AWS Provider
+// awsProviderConfig returns a default configuration for the Terraform AWS Provider.
 func awsProviderConfig() cty.Value {
 	return cty.ObjectVal(map[string]cty.Value{
 		"profile":                     cty.StringVal(os.Getenv("AWS_PROFILE")),

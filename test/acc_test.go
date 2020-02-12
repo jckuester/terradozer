@@ -1,4 +1,4 @@
-package main
+package test
 
 import (
 	"bytes"
@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gruntwork-io/terratest/modules/random"
 
 	"github.com/gruntwork-io/terratest/modules/aws"
 	"github.com/gruntwork-io/terratest/modules/terraform"
@@ -38,7 +40,6 @@ func TestAcc_ConfirmDeletion(t *testing.T) {
 				"TOTAL NUMBER OF RESOURCES THAT WOULD BE DELETED: 1",
 				"Are you sure you want to delete these resources (cannot be undone)? Only YES will be accepted.",
 				"STARTING TO DELETE RESOURCES",
-				"resource deleted",
 				"TOTAL NUMBER OF DELETED RESOURCES: 1",
 			},
 		},
@@ -68,7 +69,7 @@ func TestAcc_ConfirmDeletion(t *testing.T) {
 				Vars: map[string]interface{}{
 					"region":  env.AWSRegion,
 					"profile": env.AWSProfile,
-					"name":    "terradozer",
+					"name":    "terradozer-" + strings.ToLower(random.UniqueId()),
 				},
 			}
 
@@ -83,9 +84,9 @@ func TestAcc_ConfirmDeletion(t *testing.T) {
 			require.NoError(t, err)
 
 			if tc.expectResourceIsDeleted {
-				assertVpcDeleted(t, actualVpcID, env)
+				AssertVpcDeleted(t, actualVpcID, env)
 			} else {
-				assertVpcExists(t, actualVpcID, env)
+				AssertVpcExists(t, actualVpcID, env)
 			}
 
 			actualLogs := logBuffer.String()
@@ -118,7 +119,7 @@ func TestAcc_AllResourcesAlreadyDeleted(t *testing.T) {
 		Vars: map[string]interface{}{
 			"region":  env.AWSRegion,
 			"profile": env.AWSProfile,
-			"name":    "terradozer",
+			"name":    "terradozer-" + strings.ToLower(random.UniqueId()),
 		},
 	}
 
@@ -131,7 +132,7 @@ func TestAcc_AllResourcesAlreadyDeleted(t *testing.T) {
 
 	runBinary(t, terraformDir, "YES\n")
 
-	assertVpcDeleted(t, actualVpcID, env)
+	AssertVpcDeleted(t, actualVpcID, env)
 
 	// run a second time
 	logBuffer, err := runBinary(t, terraformDir, "")
@@ -176,7 +177,6 @@ func TestAcc_DryRun(t *testing.T) {
 				"SHOWING RESOURCES THAT WOULD BE DELETED (DRY RUN)",
 				"TOTAL NUMBER OF RESOURCES THAT WOULD BE DELETED: 1",
 				"STARTING TO DELETE RESOURCES",
-				"resource deleted",
 				"TOTAL NUMBER OF DELETED RESOURCES: 1",
 			},
 			expectResourceIsDeleted: true,
@@ -194,7 +194,7 @@ func TestAcc_DryRun(t *testing.T) {
 				Vars: map[string]interface{}{
 					"region":  env.AWSRegion,
 					"profile": env.AWSProfile,
-					"name":    "terradozer",
+					"name":    "terradozer-" + strings.ToLower(random.UniqueId()),
 				},
 			}
 
@@ -209,9 +209,9 @@ func TestAcc_DryRun(t *testing.T) {
 			require.NoError(t, err)
 
 			if tc.expectResourceIsDeleted {
-				assertVpcDeleted(t, actualVpcID, env)
+				AssertVpcDeleted(t, actualVpcID, env)
 			} else {
-				assertVpcExists(t, actualVpcID, env)
+				AssertVpcExists(t, actualVpcID, env)
 			}
 
 			actualLogs := logBuffer.String()
@@ -248,7 +248,6 @@ func TestAcc_Force(t *testing.T) {
 			flags: []string{"-force"},
 			expectedLogs: []string{
 				"STARTING TO DELETE RESOURCES",
-				"resource deleted",
 				"TOTAL NUMBER OF DELETED RESOURCES: 1",
 			},
 			unexpectedLogs: []string{
@@ -265,7 +264,6 @@ func TestAcc_Force(t *testing.T) {
 			},
 			unexpectedLogs: []string{
 				"STARTING TO DELETE RESOURCES",
-				"resource deleted",
 				"TOTAL NUMBER OF DELETED RESOURCES:",
 			},
 		},
@@ -277,7 +275,6 @@ func TestAcc_Force(t *testing.T) {
 			},
 			unexpectedLogs: []string{
 				"STARTING TO DELETE RESOURCES",
-				"resource deleted",
 				"TOTAL NUMBER OF DELETED RESOURCES:",
 			},
 			expectedErrCode: 1,
@@ -295,7 +292,7 @@ func TestAcc_Force(t *testing.T) {
 				Vars: map[string]interface{}{
 					"region":  env.AWSRegion,
 					"profile": env.AWSProfile,
-					"name":    "terradozer",
+					"name":    "terradozer-" + strings.ToLower(random.UniqueId()),
 				},
 			}
 
@@ -315,9 +312,9 @@ func TestAcc_Force(t *testing.T) {
 			}
 
 			if tc.expectResourceIsDeleted {
-				assertVpcDeleted(t, actualVpcID, env)
+				AssertVpcDeleted(t, actualVpcID, env)
 			} else {
-				assertVpcExists(t, actualVpcID, env)
+				AssertVpcExists(t, actualVpcID, env)
 			}
 
 			actualLogs := logBuffer.String()
@@ -350,7 +347,7 @@ func TestAcc_DeleteDependentResources(t *testing.T) {
 		Vars: map[string]interface{}{
 			"region":  env.AWSRegion,
 			"profile": env.AWSProfile,
-			"name":    "terradozer",
+			"name":    "terradozer-" + strings.ToLower(random.UniqueId()),
 		},
 	}
 
@@ -369,9 +366,9 @@ func TestAcc_DeleteDependentResources(t *testing.T) {
 
 	runBinary(t, terraformDir, "YES\n")
 
-	assertVpcDeleted(t, actualVpcID, env)
-	assertIamRoleDeleted(t, actualIamRole, env)
-	assertIamPolicyDeleted(t, actualIamPolicyARN, env)
+	AssertVpcDeleted(t, actualVpcID, env)
+	AssertIamRoleDeleted(t, actualIamRole, env)
+	AssertIamPolicyDeleted(t, actualIamPolicyARN, env)
 }
 
 func TestAcc_SkipUnsupportedProvider(t *testing.T) {
@@ -389,7 +386,7 @@ func TestAcc_SkipUnsupportedProvider(t *testing.T) {
 		Vars: map[string]interface{}{
 			"region":  env.AWSRegion,
 			"profile": env.AWSProfile,
-			"name":    "terradozer",
+			"name":    "terradozer-" + strings.ToLower(random.UniqueId()),
 		},
 	}
 
@@ -402,7 +399,7 @@ func TestAcc_SkipUnsupportedProvider(t *testing.T) {
 
 	runBinary(t, terraformDir, "YES\n")
 
-	assertVpcDeleted(t, actualVpcID, env)
+	AssertVpcDeleted(t, actualVpcID, env)
 }
 
 func TestAcc_DeleteNonEmptyAwsS3Bucket(t *testing.T) {
@@ -420,7 +417,7 @@ func TestAcc_DeleteNonEmptyAwsS3Bucket(t *testing.T) {
 		Vars: map[string]interface{}{
 			"region":  env.AWSRegion,
 			"profile": env.AWSProfile,
-			"name":    "terradozer",
+			"name":    "terradozer-" + strings.ToLower(random.UniqueId()),
 		},
 	}
 
@@ -434,7 +431,7 @@ func TestAcc_DeleteNonEmptyAwsS3Bucket(t *testing.T) {
 	runBinary(t, terraformDir, "YES\n")
 	time.Sleep(5 * time.Second)
 
-	assertBucketDeleted(t, actualBucketName, env)
+	AssertBucketDeleted(t, actualBucketName, env)
 }
 
 func TestAcc_DeleteAwsIamRoleWithAttachedPolicy(t *testing.T) {
@@ -452,7 +449,7 @@ func TestAcc_DeleteAwsIamRoleWithAttachedPolicy(t *testing.T) {
 		Vars: map[string]interface{}{
 			"region":  env.AWSRegion,
 			"profile": env.AWSProfile,
-			"name":    "terradozer",
+			"name":    "terradozer-" + strings.ToLower(random.UniqueId()),
 		},
 	}
 
@@ -465,7 +462,7 @@ func TestAcc_DeleteAwsIamRoleWithAttachedPolicy(t *testing.T) {
 
 	runBinary(t, terraformDir, "YES\n")
 
-	assertIamRoleDeleted(t, actualIamRole, env)
+	AssertIamRoleDeleted(t, actualIamRole, env)
 }
 
 func runBinary(t *testing.T, terraformDir, userInput string, flags ...string) (*bytes.Buffer, error) {

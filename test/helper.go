@@ -1,4 +1,5 @@
-package main
+// Package test contains acceptance tests.
+package test
 
 import (
 	"os"
@@ -6,17 +7,17 @@ import (
 
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/gruntwork-io/terratest/modules/aws"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tj/assert"
 )
 
-// EnvVars contains environment variables set for tests
+// EnvVars contains environment variables for that must be set for tests.
 type EnvVars struct {
 	AWSRegion  string
 	AWSProfile string
 }
 
-// InitEnv sets environment variables for tests
+// InitEnv sets environment variables for acceptance tests.
 func InitEnv(t *testing.T) EnvVars {
 	t.Helper()
 
@@ -80,27 +81,31 @@ func AssertIamPolicyExistsE(t *testing.T, region string, arn string) error {
 	return err
 }
 
-func assertIamRoleDeleted(t *testing.T, actualIamRole string, env EnvVars) {
+// AssertIamRoleDeleted checks if an IAM role has been deleted.
+func AssertIamRoleDeleted(t *testing.T, actualIamRole string, env EnvVars) {
 	err := AssertIamRoleExistsE(t, env.AWSRegion, actualIamRole)
 	assert.Error(t, err, "resource hasn't been deleted")
 }
 
-func assertIamPolicyDeleted(t *testing.T, actualIamPolicyARN string, env EnvVars) {
+// AssertIamPolicyDeleted checks if an IAM policy has been deleted.
+func AssertIamPolicyDeleted(t *testing.T, actualIamPolicyARN string, env EnvVars) {
 	err := AssertIamPolicyExistsE(t, env.AWSRegion, actualIamPolicyARN)
 	assert.Error(t, err, "resource hasn't been deleted")
 }
 
-func assertVpcExists(t *testing.T, actualVpcID string, env EnvVars) {
+func AssertVpcExists(t *testing.T, actualVpcID string, env EnvVars) {
 	_, err := aws.GetVpcByIdE(t, actualVpcID, env.AWSRegion)
 	assert.NoError(t, err, "resource has been unexpectedly deleted")
 }
 
-func assertVpcDeleted(t *testing.T, actualVpcID string, env EnvVars) {
+// AssertVpcDeleted checks if an VPC has been deleted.
+func AssertVpcDeleted(t *testing.T, actualVpcID string, env EnvVars) {
 	_, err := aws.GetVpcByIdE(t, actualVpcID, env.AWSRegion)
 	assert.Error(t, err, "resource hasn't been deleted")
 }
 
-func assertBucketDeleted(t *testing.T, actualBucketName string, env EnvVars) {
+// AssertBucketDeleted checks if an AWS S3 bucket has been deleted.
+func AssertBucketDeleted(t *testing.T, actualBucketName string, env EnvVars) {
 	err := aws.AssertS3BucketExistsE(t, env.AWSRegion, actualBucketName)
 	assert.Error(t, err, "resource hasn't been deleted")
 }
