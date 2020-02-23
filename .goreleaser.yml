@@ -2,12 +2,17 @@ builds:
   - binary: terradozer
     goos:
       - darwin
-#      - windows coming soon
+      - windows
       - linux
       - freebsd
+      - arm64
+      - arm
     goarch:
       - amd64
       - 386
+    goarm:
+      - 6
+      - 7
     env:
       - CGO_ENABLED=0
     ldflags: -s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}}

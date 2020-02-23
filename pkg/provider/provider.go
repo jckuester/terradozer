@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	"github.com/jckuester/terradozer/internal"
 
@@ -171,7 +172,7 @@ func Install(providerName, versionConstraint string, cacheBinary bool) (discover
 		Dir: installDir,
 		Cache: func() discovery.PluginCache {
 			if cacheBinary {
-				return discovery.NewLocalPluginCache(installDir + "/cache")
+				return discovery.NewLocalPluginCache(filepath.FromSlash(installDir + "/cache"))
 			}
 			return nil
 		}(),
