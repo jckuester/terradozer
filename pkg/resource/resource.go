@@ -57,14 +57,10 @@ func (r Resource) Destroy(dryRun bool) error {
 	}
 
 	for _, resImp := range importResp.ImportedResources {
-		log.WithField("state", resImp.State.GoString()).Debug(internal.Pad("imported resource state"))
-
 		readResp := r.provider.ReadResource(resImp)
 		if readResp.Diagnostics.HasErrors() {
 			return fmt.Errorf("failed to read current state of resource: %s", readResp.Diagnostics.Err())
 		}
-
-		log.WithField("state", readResp.NewState.GoString()).Debug(internal.Pad("read resource state"))
 
 		resourceNotFound := readResp.NewState.IsNull()
 		if resourceNotFound {
@@ -83,8 +79,6 @@ func (r Resource) Destroy(dryRun bool) error {
 
 			return NewRetryDestroyError(respApply.Diagnostics.Err(), r)
 		}
-
-		log.WithField("state", respApply.NewState.GoString()).Debug(internal.Pad("new resource state after apply"))
 
 		log.WithField("id", r.id).Error(internal.Pad(r.terraformType))
 	}
@@ -111,7 +105,7 @@ func DestroyResources(resources []DestroyableResource, dryRun bool, parallel int
 		go worker(workerID, dryRun, jobQueue, workerResults)
 	}
 
-	log.Debug("start distributing resources to workers")
+	log.Debug("start distributing resources to workers for this run")
 
 	for _, r := range resources {
 		jobQueue <- r
