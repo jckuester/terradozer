@@ -162,15 +162,15 @@ func TestTerraformProvider_ImportResource(t *testing.T) {
 	actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
 	aws.GetVpcById(t, actualVpcID, env.AWSRegion)
 
-	provider, err := provider.Init("aws")
+	provider, err := provider.Init("aws", 15)
 	require.NoError(t, err)
 
-	importResp := provider.ImportResource("aws_vpc", actualVpcID)
-	assert.NoError(t, importResp.Diagnostics.Err())
-	assert.Len(t, importResp.ImportedResources, 1)
+	importedResources, err := provider.ImportResource("aws_vpc", actualVpcID)
+	require.NoError(t, err)
+	assert.Len(t, importedResources, 1)
 
-	assert.Equal(t, importResp.ImportedResources[0].TypeName, "aws_vpc")
-	assert.Equal(t, importResp.ImportedResources[0].State, cty.ObjectVal(map[string]cty.Value{
+	assert.Equal(t, importedResources[0].TypeName, "aws_vpc")
+	assert.Equal(t, importedResources[0].State, cty.ObjectVal(map[string]cty.Value{
 		"arn":                              cty.NullVal(cty.String),
 		"assign_generated_ipv6_cidr_block": cty.False,
 		"cidr_block":                       cty.NullVal(cty.String),
@@ -220,10 +220,10 @@ func TestTerraformProvider_ReadResource(t *testing.T) {
 	actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
 	aws.GetVpcById(t, actualVpcID, env.AWSRegion)
 
-	p, err := provider.Init("aws")
+	p, err := provider.Init("aws", 15)
 	require.NoError(t, err)
 
-	readResp := p.ReadResource(providers.ImportedResource{
+	currentResourceState, err := p.ReadResource(providers.ImportedResource{
 		TypeName: "aws_vpc",
 		State: cty.ObjectVal(map[string]cty.Value{
 			"arn":                              cty.NullVal(cty.String),
@@ -246,13 +246,12 @@ func TestTerraformProvider_ReadResource(t *testing.T) {
 			"tags":                             cty.NullVal(cty.Map(cty.String)),
 		}),
 	})
+	require.NoError(t, err)
 
-	assert.NoError(t, readResp.Diagnostics.Err())
-
-	assert.Equal(t, readResp.NewState.GetAttr("tags"),
+	assert.Equal(t, currentResourceState.GetAttr("tags"),
 		cty.MapVal(map[string]cty.Value{"Name": cty.StringVal(testName)}))
 
-	assert.Equal(t, readResp.NewState.GetAttr("cidr_block"),
+	assert.Equal(t, currentResourceState.GetAttr("cidr_block"),
 		cty.StringVal("10.0.0.0/16"))
 }
 
@@ -282,7 +281,7 @@ func TestInitProviders(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			actualProviders, err := provider.InitProviders(tc.providerNames)
+			actualProviders, err := provider.InitProviders(tc.providerNames, 15)
 
 			if tc.expectedErrMsg != "" {
 				assert.EqualError(t, err, tc.expectedErrMsg)

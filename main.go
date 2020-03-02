@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	stdlog "log"
 	"os"
+	"time"
 
 	"github.com/apex/log"
 	"github.com/apex/log/handlers/cli"
@@ -24,11 +25,13 @@ var (
 	logDebug    bool
 	pathToState string
 	parallel    int
+	timeout     string
 	version     bool
 )
 
 //nolint:gochecknoinits
 func init() {
+	flag.StringVar(&timeout, "timeout", "30s", "Amount of time to wait for a destroy of a resource to finish")
 	flag.BoolVar(&dryRun, "dry", false, "Don't delete anything")
 	flag.BoolVar(&force, "force", false, "Delete without asking for confirmation")
 	flag.BoolVar(&logDebug, "debug", false, "Enable debug logging")
@@ -75,7 +78,13 @@ func mainExitCode() int {
 	internal.LogTitle("reading state")
 	log.WithField("file", pathToState).Info(internal.Pad("using state"))
 
-	providers, err := provider.InitProviders(tfstate.ProviderNames())
+	timeoutDuration, err := time.ParseDuration(timeout)
+	if err != nil {
+		log.WithError(err).Error("failed to parse timeout")
+		return 1
+	}
+
+	providers, err := provider.InitProviders(tfstate.ProviderNames(), timeoutDuration)
 	if err != nil {
 		log.WithError(err).Error("failed to initialize Terraform providers")
 		return 1

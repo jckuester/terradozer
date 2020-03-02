@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gruntwork-io/terratest/modules/aws"
 	"github.com/gruntwork-io/terratest/modules/random"
@@ -135,11 +136,13 @@ func TestResource_Destroy(t *testing.T) {
 			actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
 			aws.GetVpcById(t, actualVpcID, env.AWSRegion)
 
-			awsProvider, err := provider.Init("aws")
+			awsProvider, err := provider.Init("aws", 10*time.Second)
 			require.NoError(t, err)
 
 			resource := resource.New("aws_vpc", actualVpcID, awsProvider)
-			resource.Destroy(tc.dryRun)
+
+			err = resource.Destroy(tc.dryRun)
+			require.NoError(t, err)
 
 			if tc.expectResourceIsDeleted {
 				test.AssertVpcDeleted(t, actualVpcID, env)
@@ -148,4 +151,54 @@ func TestResource_Destroy(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestResource_Destroy_Timeout(t *testing.T) {
+	env := test.InitEnv(t)
+
+	terraformDir := "../../test/test-fixtures/single-resource"
+
+	terraformOptions := &terraform.Options{
+		TerraformDir: terraformDir,
+		NoColor:      true,
+		Vars: map[string]interface{}{
+			"region":  env.AWSRegion,
+			"profile": env.AWSProfile,
+			"name":    "terradozer-" + strings.ToLower(random.UniqueId()),
+		},
+	}
+
+	defer terraform.Destroy(t, terraformOptions)
+
+	terraform.InitAndApply(t, terraformOptions)
+
+	actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
+	aws.GetVpcById(t, actualVpcID, env.AWSRegion)
+
+	// apply dependency
+
+	terraformDirDependency := "../../test/test-fixtures/single-resource/dependency"
+
+	terraformOptionsDependency := &terraform.Options{
+		TerraformDir: terraformDirDependency,
+		NoColor:      true,
+		Vars: map[string]interface{}{
+			"region":  env.AWSRegion,
+			"profile": env.AWSProfile,
+			"name":    "terradozer-" + strings.ToLower(random.UniqueId()),
+			"vpc_id":  actualVpcID,
+		},
+	}
+
+	defer terraform.Destroy(t, terraformOptionsDependency)
+
+	terraform.InitAndApply(t, terraformOptionsDependency)
+
+	awsProvider, err := provider.Init("aws", 5*time.Second)
+	require.NoError(t, err)
+
+	resource := resource.New("aws_vpc", actualVpcID, awsProvider)
+
+	err = resource.Destroy(false)
+	assert.EqualError(t, err, "destroy timed out (5s)")
 }

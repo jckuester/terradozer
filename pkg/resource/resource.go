@@ -51,18 +51,18 @@ func (r Resource) ID() string {
 
 // Destroy destroys a Terraform resource.
 func (r Resource) Destroy(dryRun bool) error {
-	importResp := r.provider.ImportResource(r.terraformType, r.id)
-	if importResp.Diagnostics.HasErrors() {
-		return fmt.Errorf("failed to import resource: %s", importResp.Diagnostics.Err())
+	importedResources, err := r.provider.ImportResource(r.terraformType, r.id)
+	if err != nil {
+		return fmt.Errorf("failed to import resource: %s", err)
 	}
 
-	for _, resImp := range importResp.ImportedResources {
-		readResp := r.provider.ReadResource(resImp)
-		if readResp.Diagnostics.HasErrors() {
-			return fmt.Errorf("failed to read current state of resource: %s", readResp.Diagnostics.Err())
+	for _, rImported := range importedResources {
+		currentResourceState, err := r.provider.ReadResource(rImported)
+		if err != nil {
+			return fmt.Errorf("failed to read current state of resource: %s", err)
 		}
 
-		resourceNotFound := readResp.NewState.IsNull()
+		resourceNotFound := currentResourceState.IsNull()
 		if resourceNotFound {
 			return fmt.Errorf("resource found in state doesn't exist anymore")
 		}
@@ -73,11 +73,12 @@ func (r Resource) Destroy(dryRun bool) error {
 			return nil
 		}
 
-		respApply := r.provider.DestroyResource(r.terraformType, readResp.NewState)
-		if respApply.Diagnostics.HasErrors() {
-			log.WithError(respApply.Diagnostics.Err()).Debug(internal.Pad("failed to delete resource"))
+		err = r.provider.DestroyResource(r.terraformType, currentResourceState)
+		if err != nil {
+			log.WithError(err).WithFields(log.Fields{
+				"id": r.id, "type": r.terraformType}).Debug(internal.Pad("failed to delete resource"))
 
-			return NewRetryDestroyError(respApply.Diagnostics.Err(), r)
+			return NewRetryDestroyError(err, r)
 		}
 
 		log.WithField("id", r.id).Error(internal.Pad(r.terraformType))
@@ -137,7 +138,8 @@ func DestroyResources(resources []DestroyableResource, dryRun bool, parallel int
 	}
 
 	if len(retryableResourceErrors) > 0 && numOfDeletedResources == 0 {
-		internal.LogTitle("failed to delete the following resources (retries exceeded)")
+		internal.LogTitle(fmt.Sprintf("failed to delete the following resources (retries exceeded): %d",
+			len(retryableResourceErrors)))
 
 		for _, err := range retryableResourceErrors {
 			log.WithError(err).WithField("id", err.Resource.ID()).Warn(internal.Pad(err.Resource.Type()))

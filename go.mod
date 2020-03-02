@@ -11,7 +11,7 @@ require (
 	github.com/hashicorp/go-hclog v0.12.0
 	github.com/hashicorp/go-plugin v1.0.1
 	github.com/hashicorp/go-version v1.2.0
-	github.com/hashicorp/terraform v0.12.20
+	github.com/hashicorp/terraform v0.12.21
 	github.com/mitchellh/cli v1.0.0
 	github.com/onsi/gomega v1.9.0
 	github.com/stretchr/testify v1.4.0

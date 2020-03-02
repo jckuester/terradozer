@@ -130,7 +130,8 @@ func TestAcc_AllResourcesAlreadyDeleted(t *testing.T) {
 	actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
 	aws.GetVpcById(t, actualVpcID, env.AWSRegion)
 
-	runBinary(t, terraformDir, "YES\n")
+	_, err := runBinary(t, terraformDir, "YES\n")
+	require.NoError(t, err)
 
 	AssertVpcDeleted(t, actualVpcID, env)
 
@@ -225,7 +226,6 @@ func TestAcc_DryRun(t *testing.T) {
 			}
 
 			fmt.Println(actualLogs)
-
 		})
 	}
 }
@@ -364,7 +364,8 @@ func TestAcc_DeleteDependentResources(t *testing.T) {
 	actualIamPolicyARN := terraform.Output(t, terraformOptions, "policy_arn")
 	AssertIamPolicyExists(t, env.AWSRegion, actualIamPolicyARN)
 
-	runBinary(t, terraformDir, "YES\n")
+	_, err := runBinary(t, terraformDir, "YES\n")
+	require.NoError(t, err)
 
 	AssertVpcDeleted(t, actualVpcID, env)
 	AssertIamRoleDeleted(t, actualIamRole, env)
@@ -397,9 +398,66 @@ func TestAcc_SkipUnsupportedProvider(t *testing.T) {
 	actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
 	aws.GetVpcById(t, actualVpcID, env.AWSRegion)
 
-	runBinary(t, terraformDir, "YES\n")
+	_, err := runBinary(t, terraformDir, "YES\n")
+	require.NoError(t, err)
 
 	AssertVpcDeleted(t, actualVpcID, env)
+}
+
+func TestAcc_DeleteTimeout(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping acceptance test.")
+	}
+
+	env := InitEnv(t)
+
+	terraformDir := "./test-fixtures/single-resource"
+
+	terraformOptions := &terraform.Options{
+		TerraformDir: terraformDir,
+		NoColor:      true,
+		Vars: map[string]interface{}{
+			"region":  env.AWSRegion,
+			"profile": env.AWSProfile,
+			"name":    "terradozer-" + strings.ToLower(random.UniqueId()),
+		},
+	}
+
+	defer terraform.Destroy(t, terraformOptions)
+
+	terraform.InitAndApply(t, terraformOptions)
+
+	actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
+	aws.GetVpcById(t, actualVpcID, env.AWSRegion)
+
+	// apply dependency
+
+	terraformDirDependency := "./test-fixtures/single-resource/dependency"
+
+	terraformOptionsDependency := &terraform.Options{
+		TerraformDir: terraformDirDependency,
+		NoColor:      true,
+		Vars: map[string]interface{}{
+			"region":  env.AWSRegion,
+			"profile": env.AWSProfile,
+			"name":    "terradozer-" + strings.ToLower(random.UniqueId()),
+			"vpc_id":  actualVpcID,
+		},
+	}
+
+	defer terraform.Destroy(t, terraformOptionsDependency)
+
+	terraform.InitAndApply(t, terraformOptionsDependency)
+
+	logBuffer, err := runBinary(t, terraformDir, "YES\n", "-timeout", "2s")
+	require.NoError(t, err)
+
+	actualLogs := logBuffer.String()
+
+	assert.Contains(t, actualLogs, "FAILED TO DELETE THE FOLLOWING RESOURCES (RETRIES EXCEEDED): 1")
+	assert.Contains(t, actualLogs, "destroy timed out (2s)")
+
+	fmt.Println(actualLogs)
 }
 
 func TestAcc_DeleteNonEmptyAwsS3Bucket(t *testing.T) {
@@ -428,7 +486,9 @@ func TestAcc_DeleteNonEmptyAwsS3Bucket(t *testing.T) {
 	actualBucketName := terraform.Output(t, terraformOptions, "bucket_name")
 	aws.AssertS3BucketExists(t, env.AWSRegion, actualBucketName)
 
-	runBinary(t, terraformDir, "YES\n")
+	_, err := runBinary(t, terraformDir, "YES\n")
+	require.NoError(t, err)
+
 	time.Sleep(5 * time.Second)
 
 	AssertBucketDeleted(t, actualBucketName, env)
@@ -460,7 +520,8 @@ func TestAcc_DeleteAwsIamRoleWithAttachedPolicy(t *testing.T) {
 	actualIamRole := terraform.Output(t, terraformOptions, "role_name")
 	AssertIamRoleExists(t, env.AWSRegion, actualIamRole)
 
-	runBinary(t, terraformDir, "YES\n")
+	_, err := runBinary(t, terraformDir, "YES\n")
+	require.NoError(t, err)
 
 	AssertIamRoleDeleted(t, actualIamRole, env)
 }

@@ -4,3 +4,4 @@
 *.tfstate
 *.backup
 bin/
+coverage.txt

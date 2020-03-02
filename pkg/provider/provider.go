@@ -7,6 +7,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/hashicorp/terraform/helper/resource"
 
 	"github.com/jckuester/terradozer/internal"
 
@@ -22,6 +26,8 @@ import (
 	"github.com/zclconf/go-cty/cty"
 )
 
+const requestError = "RequestError"
+
 // provider is the interface that every Terraform Provider Plugin implements.
 type provider interface {
 	Configure(providers.ConfigureRequest) providers.ConfigureResponse
@@ -32,10 +38,13 @@ type provider interface {
 
 type TerraformProvider struct {
 	provider
+	// timeout is the amount of time to wait for a destroy operation of the provider to finish
+	timeout time.Duration
 }
 
 // Launch launches a Provider Plugin executable to provide the RPC server for this plugin.
-func Launch(pathToPluginExecutable string) (*TerraformProvider, error) {
+// Timeout is the amount of time to wait for a destroy operation of the provider to finish.
+func Launch(pathToPluginExecutable string, timeout time.Duration) (*TerraformProvider, error) {
 	m := discovery.PluginMeta{
 		Path: pathToPluginExecutable,
 	}
@@ -45,7 +54,7 @@ func Launch(pathToPluginExecutable string) (*TerraformProvider, error) {
 		return nil, err
 	}
 
-	return &TerraformProvider{p}, nil
+	return &TerraformProvider{p, timeout}, nil
 }
 
 // copied (and modified) from github.com/hashicorp/terraform/command/plugins.go
@@ -104,39 +113,104 @@ func (p TerraformProvider) Configure(config cty.Value) error {
 // For example, call:
 //   ImportResource("aws_instance", "i-1234567890abcdef0")
 // The result is a resource which has only its ID set (all other attributes are empty).
-func (p TerraformProvider) ImportResource(terraformType string, resID string) providers.ImportResourceStateResponse {
-	response := p.ImportResourceState(providers.ImportResourceStateRequest{
-		TypeName: terraformType,
-		ID:       resID,
+func (p TerraformProvider) ImportResource(terraformType string, resID string) ([]providers.ImportedResource, error) {
+	var response providers.ImportResourceStateResponse
+
+	err := resource.Retry(30*time.Second, func() *resource.RetryError {
+		response = p.ImportResourceState(providers.ImportResourceStateRequest{
+			TypeName: terraformType,
+			ID:       resID,
+		})
+
+		if response.Diagnostics.HasErrors() {
+			if strings.Contains(response.Diagnostics.Err().Error(), requestError) {
+				log.WithError(response.Diagnostics.Err()).Debug("retrying to import resource")
+
+				return resource.RetryableError(response.Diagnostics.Err())
+			}
+		}
+
+		return nil
 	})
 
-	return response
+	if response.Diagnostics.HasErrors() {
+		return nil, response.Diagnostics.Err()
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("import timed out (%s)", p.timeout)
+	}
+
+	return response.ImportedResources, nil
 }
 
 // ReadResource refreshes and sets all attributes of an imported resource.
 // This function is used to populate all attributes of a resource after import.
-func (p TerraformProvider) ReadResource(r providers.ImportedResource) providers.ReadResourceResponse {
-	response := p.provider.ReadResource(providers.ReadResourceRequest{
-		TypeName:   r.TypeName,
-		PriorState: r.State,
-		Private:    r.Private,
+func (p TerraformProvider) ReadResource(r providers.ImportedResource) (cty.Value, error) {
+	var response providers.ReadResourceResponse
+
+	err := resource.Retry(30*time.Second, func() *resource.RetryError {
+		response = p.provider.ReadResource(providers.ReadResourceRequest{
+			TypeName:   r.TypeName,
+			PriorState: r.State,
+			Private:    r.Private,
+		})
+
+		if response.Diagnostics.HasErrors() {
+			if strings.Contains(response.Diagnostics.Err().Error(), requestError) {
+				log.WithError(response.Diagnostics.Err()).Debug("retrying to read current state of resource")
+
+				return resource.RetryableError(response.Diagnostics.Err())
+			}
+		}
+
+		return nil
 	})
 
-	return response
+	if response.Diagnostics.HasErrors() {
+		return cty.NilVal, response.Diagnostics.Err()
+	}
+
+	if err != nil {
+		return cty.NilVal, fmt.Errorf("read timed out (%s)", p.timeout)
+	}
+
+	return response.NewState, nil
 }
 
 // DestroyResource destroys a resource.
 // This function requires the current state of a resource as input (fetched via ReadResource).
-func (p TerraformProvider) DestroyResource(
-	terraformType string, currentState cty.Value) providers.ApplyResourceChangeResponse {
-	response := p.ApplyResourceChange(providers.ApplyResourceChangeRequest{
-		TypeName:     terraformType,
-		PriorState:   enableForceDestroyAttributes(currentState),
-		PlannedState: cty.NullVal(cty.DynamicPseudoType),
-		Config:       cty.NullVal(cty.DynamicPseudoType),
+func (p TerraformProvider) DestroyResource(terraformType string, currentState cty.Value) error {
+	var response providers.ApplyResourceChangeResponse
+
+	err := resource.Retry(p.timeout, func() *resource.RetryError {
+		response = p.ApplyResourceChange(providers.ApplyResourceChangeRequest{
+			TypeName:     terraformType,
+			PriorState:   enableForceDestroyAttributes(currentState),
+			PlannedState: cty.NullVal(cty.DynamicPseudoType),
+			Config:       cty.NullVal(cty.DynamicPseudoType),
+		})
+
+		if response.Diagnostics.HasErrors() {
+			if strings.Contains(response.Diagnostics.Err().Error(), requestError) {
+				log.WithError(response.Diagnostics.Err()).Debug("retrying to destroy resource")
+
+				return resource.RetryableError(response.Diagnostics.Err())
+			}
+		}
+
+		return nil
 	})
 
-	return response
+	if response.Diagnostics.HasErrors() {
+		return response.Diagnostics.Err()
+	}
+
+	if err != nil {
+		return fmt.Errorf("destroy timed out (%s)", p.timeout)
+	}
+
+	return nil
 }
 
 // enableForceDestroyAttributes sets force destroy attributes of a resource to true
@@ -211,7 +285,8 @@ func Install(providerName, versionConstraint string, cacheBinary bool) (discover
 // a given Terraform Provider by name with a default configuration.
 //
 // Note: Init() combines calls to the functions Install(), Launch(), and Configure().
-func Init(providerName string) (*TerraformProvider, error) {
+// Timeout is the amount of time to wait for a destroy operation of the provider to finish.
+func Init(providerName string, timeout time.Duration) (*TerraformProvider, error) {
 	pConfig, pVersion, err := config(providerName)
 	if err != nil {
 		log.WithField("name", providerName).Info(internal.Pad("ignoring resources of (yet) unsupported provider"))
@@ -228,7 +303,7 @@ func Init(providerName string) (*TerraformProvider, error) {
 		"version": metaPlugin.Version,
 	}).Info(internal.Pad("downloaded and installed provider"))
 
-	p, err := Launch(metaPlugin.Path)
+	p, err := Launch(metaPlugin.Path, timeout)
 	if err != nil {
 		return nil, fmt.Errorf("failed to launch provider (%s): %s", metaPlugin.Path, err)
 	}
@@ -249,11 +324,11 @@ func Init(providerName string) (*TerraformProvider, error) {
 
 // InitProviders installs, launches (i.e., starts the plugin binary process), and configures
 // a given list of Terraform Providers by name with a default configuration.
-func InitProviders(providerNames []string) (map[string]*TerraformProvider, error) {
+func InitProviders(providerNames []string, timeout time.Duration) (map[string]*TerraformProvider, error) {
 	providers := map[string]*TerraformProvider{}
 
 	for _, pName := range providerNames {
-		p, err := Init(pName)
+		p, err := Init(pName, timeout)
 		if err != nil {
 			return nil, err
 		}
