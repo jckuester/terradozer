@@ -37,7 +37,7 @@ func awsProviderConfig() cty.Value {
 		"skip_metadata_api_check":     cty.UnknownVal(cty.DynamicPseudoType),
 		"skip_region_validation":      cty.UnknownVal(cty.DynamicPseudoType),
 		"skip_requesting_account_id":  cty.UnknownVal(cty.DynamicPseudoType),
-		"token":                       cty.UnknownVal(cty.DynamicPseudoType),
+		"token":                       cty.StringVal(os.Getenv("AWS_SESSION_TOKEN")),
 		"ignore_tag_prefixes":         cty.UnknownVal(cty.DynamicPseudoType),
 		"ignore_tags":                 cty.UnknownVal(cty.DynamicPseudoType),
 	})
