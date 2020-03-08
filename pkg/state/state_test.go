@@ -36,7 +36,7 @@ func TestNewState(t *testing.T) {
 		{
 			name:           "wrong path to state",
 			pathToState:    "not/exist/terraform.tfstate",
-			expectedErrMsg: "failed loading statefile: open not/exist/terraform.tfstate: no such file or directory",
+			expectedErrMsg: "open not/exist/terraform.tfstate: no such file or directory",
 		},
 	}
 	for _, tc := range tests {

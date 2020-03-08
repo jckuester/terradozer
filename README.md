@@ -1,7 +1,7 @@
 <p align="center">
   <img alt="TerraDozer Logo" src="https://github.com/jckuester/terradozer/blob/master/img/logo.png" height="180" />
   <h3 align="center">TerraDozer</h3>
-  <p align="center">Terraform destroy without configuration files.</p>
+  <p align="center">Terraform destroy using only the state - no *.tf files needed</p>
 </p>
 
 ---

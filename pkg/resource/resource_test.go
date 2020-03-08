@@ -2,12 +2,10 @@ package resource_test
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/gruntwork-io/terratest/modules/aws"
-	"github.com/gruntwork-io/terratest/modules/random"
 	"github.com/gruntwork-io/terratest/modules/terraform"
 	"github.com/jckuester/terradozer/pkg/provider"
 	"github.com/jckuester/terradozer/test"
@@ -119,15 +117,7 @@ func TestResource_Destroy(t *testing.T) {
 
 			terraformDir := "../../test/test-fixtures/single-resource"
 
-			terraformOptions := &terraform.Options{
-				TerraformDir: terraformDir,
-				NoColor:      true,
-				Vars: map[string]interface{}{
-					"region":  env.AWSRegion,
-					"profile": env.AWSProfile,
-					"name":    "terradozer-" + strings.ToLower(random.UniqueId()),
-				},
-			}
+			terraformOptions := test.GetTerraformOptions(terraformDir, env)
 
 			defer terraform.Destroy(t, terraformOptions)
 
@@ -158,15 +148,7 @@ func TestResource_Destroy_Timeout(t *testing.T) {
 
 	terraformDir := "../../test/test-fixtures/single-resource"
 
-	terraformOptions := &terraform.Options{
-		TerraformDir: terraformDir,
-		NoColor:      true,
-		Vars: map[string]interface{}{
-			"region":  env.AWSRegion,
-			"profile": env.AWSProfile,
-			"name":    "terradozer-" + strings.ToLower(random.UniqueId()),
-		},
-	}
+	terraformOptions := test.GetTerraformOptions(terraformDir, env)
 
 	defer terraform.Destroy(t, terraformOptions)
 
@@ -179,16 +161,8 @@ func TestResource_Destroy_Timeout(t *testing.T) {
 
 	terraformDirDependency := "../../test/test-fixtures/single-resource/dependency"
 
-	terraformOptionsDependency := &terraform.Options{
-		TerraformDir: terraformDirDependency,
-		NoColor:      true,
-		Vars: map[string]interface{}{
-			"region":  env.AWSRegion,
-			"profile": env.AWSProfile,
-			"name":    "terradozer-" + strings.ToLower(random.UniqueId()),
-			"vpc_id":  actualVpcID,
-		},
-	}
+	terraformOptionsDependency := test.GetTerraformOptions(terraformDirDependency, env,
+		map[string]interface{}{"vpc_id": actualVpcID})
 
 	defer terraform.Destroy(t, terraformOptionsDependency)
 

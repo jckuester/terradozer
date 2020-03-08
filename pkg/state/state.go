@@ -37,7 +37,7 @@ func New(path string) (*State, error) {
 func getStateFromPath(path string) (*statefile.File, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed loading statefile: %s", err)
+		return nil, err
 	}
 	defer f.Close()
 

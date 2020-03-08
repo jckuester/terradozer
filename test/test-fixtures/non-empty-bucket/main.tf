@@ -5,6 +5,12 @@ provider "aws" {
   region  = var.region
 }
 
+terraform {
+  # The configuration for this backend will be filled in by Terragrunt
+  backend "s3" {
+  }
+}
+
 resource "aws_s3_bucket" "test" {
   bucket = var.name
 

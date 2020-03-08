@@ -3,12 +3,12 @@ package test
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/gruntwork-io/terratest/modules/random"
 
 	"github.com/gruntwork-io/terratest/modules/aws"
 	"github.com/gruntwork-io/terratest/modules/terraform"
@@ -17,7 +17,29 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const packagePath = "github.com/jckuester/terradozer"
+const (
+	packagePath  = "github.com/jckuester/terradozer"
+	usageMessage = `
+Terraform destroy using only the state file.
+
+USAGE:
+  $ terradozer [flags] [path/to/terraform.tfstate]
+
+FLAGS:
+  -debug
+    	Enable debug logging
+  -dry
+    	Show what would be destroyed
+  -force
+    	Destroy without asking for confirmation
+  -parallel int
+    	Limit the number of concurrent destroy operations (default 10)
+  -timeout string
+    	Amount of time to wait for a destroy of a resource to finish (default "30s")
+  -version
+    	Show application version
+`
+)
 
 func TestAcc_ConfirmDeletion(t *testing.T) {
 	if testing.Short() {
@@ -63,15 +85,7 @@ func TestAcc_ConfirmDeletion(t *testing.T) {
 
 			terraformDir := "./test-fixtures/single-resource"
 
-			terraformOptions := &terraform.Options{
-				TerraformDir: terraformDir,
-				NoColor:      true,
-				Vars: map[string]interface{}{
-					"region":  env.AWSRegion,
-					"profile": env.AWSProfile,
-					"name":    "terradozer-" + strings.ToLower(random.UniqueId()),
-				},
-			}
+			terraformOptions := GetTerraformOptions(terraformDir, env)
 
 			defer terraform.Destroy(t, terraformOptions)
 
@@ -80,7 +94,10 @@ func TestAcc_ConfirmDeletion(t *testing.T) {
 			actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
 			aws.GetVpcById(t, actualVpcID, env.AWSRegion)
 
-			logBuffer, err := runBinary(t, terraformDir, tc.userInput)
+			tfstateFile, err := WriteRemoteStateToLocalFile(t, env, terraformOptions)
+			defer os.Remove(tfstateFile)
+
+			logBuffer, err := runBinary(t, tc.userInput, tfstateFile)
 			require.NoError(t, err)
 
 			if tc.expectResourceIsDeleted {
@@ -113,15 +130,7 @@ func TestAcc_AllResourcesAlreadyDeleted(t *testing.T) {
 
 	terraformDir := "./test-fixtures/single-resource"
 
-	terraformOptions := &terraform.Options{
-		TerraformDir: terraformDir,
-		NoColor:      true,
-		Vars: map[string]interface{}{
-			"region":  env.AWSRegion,
-			"profile": env.AWSProfile,
-			"name":    "terradozer-" + strings.ToLower(random.UniqueId()),
-		},
-	}
+	terraformOptions := GetTerraformOptions(terraformDir, env)
 
 	defer terraform.Destroy(t, terraformOptions)
 
@@ -130,13 +139,16 @@ func TestAcc_AllResourcesAlreadyDeleted(t *testing.T) {
 	actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
 	aws.GetVpcById(t, actualVpcID, env.AWSRegion)
 
-	_, err := runBinary(t, terraformDir, "YES\n")
+	tfstateFile, err := WriteRemoteStateToLocalFile(t, env, terraformOptions)
+	defer os.Remove(tfstateFile)
+
+	_, err = runBinary(t, "YES\n", tfstateFile)
 	require.NoError(t, err)
 
 	AssertVpcDeleted(t, actualVpcID, env)
 
 	// run a second time
-	logBuffer, err := runBinary(t, terraformDir, "")
+	logBuffer, err := runBinary(t, "", tfstateFile)
 	require.NoError(t, err)
 
 	actualLogs := logBuffer.String()
@@ -146,6 +158,57 @@ func TestAcc_AllResourcesAlreadyDeleted(t *testing.T) {
 
 	fmt.Println(actualLogs)
 
+}
+
+func TestAcc_Version(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping acceptance test.")
+	}
+
+	logBuffer, err := runBinary(t, "", "-version")
+	require.NoError(t, err)
+
+	actualLogs := logBuffer.String()
+
+	assert.Contains(t, actualLogs, fmt.Sprintf(`
+version: dev
+commit: ?
+built at: ?
+using: %s`, runtime.Version()))
+
+	fmt.Println(actualLogs)
+}
+
+func TestAcc_MissingStatePathArgument(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping acceptance test.")
+	}
+
+	logBuffer, err := runBinary(t, "")
+	require.Error(t, err)
+
+	actualLogs := logBuffer.String()
+
+	assert.Contains(t, actualLogs, fmt.Sprintf(`Error: path to Terraform state file expected
+%s`, usageMessage))
+
+	fmt.Println(actualLogs)
+}
+
+func TestAcc_UndefinedFlag(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping acceptance test.")
+	}
+
+	logBuffer, err := runBinary(t, "", "-foo")
+	require.Error(t, err)
+
+	actualLogs := logBuffer.String()
+
+	assert.Contains(t, actualLogs, fmt.Sprintf(`flag provided but not defined: -foo
+%s`, usageMessage))
+
+	fmt.Println(actualLogs)
 }
 
 func TestAcc_DryRun(t *testing.T) {
@@ -189,15 +252,7 @@ func TestAcc_DryRun(t *testing.T) {
 
 			terraformDir := "./test-fixtures/single-resource"
 
-			terraformOptions := &terraform.Options{
-				TerraformDir: terraformDir,
-				NoColor:      true,
-				Vars: map[string]interface{}{
-					"region":  env.AWSRegion,
-					"profile": env.AWSProfile,
-					"name":    "terradozer-" + strings.ToLower(random.UniqueId()),
-				},
-			}
+			terraformOptions := GetTerraformOptions(terraformDir, env)
 
 			defer terraform.Destroy(t, terraformOptions)
 
@@ -206,7 +261,10 @@ func TestAcc_DryRun(t *testing.T) {
 			actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
 			aws.GetVpcById(t, actualVpcID, env.AWSRegion)
 
-			logBuffer, err := runBinary(t, terraformDir, "YES\n", tc.flag)
+			tfstateFile, err := WriteRemoteStateToLocalFile(t, env, terraformOptions)
+			defer os.Remove(tfstateFile)
+
+			logBuffer, err := runBinary(t, "YES\n", tc.flag, tfstateFile)
 			require.NoError(t, err)
 
 			if tc.expectResourceIsDeleted {
@@ -286,15 +344,7 @@ func TestAcc_Force(t *testing.T) {
 
 			terraformDir := "./test-fixtures/single-resource"
 
-			terraformOptions := &terraform.Options{
-				TerraformDir: terraformDir,
-				NoColor:      true,
-				Vars: map[string]interface{}{
-					"region":  env.AWSRegion,
-					"profile": env.AWSProfile,
-					"name":    "terradozer-" + strings.ToLower(random.UniqueId()),
-				},
-			}
+			terraformOptions := GetTerraformOptions(terraformDir, env)
 
 			defer terraform.Destroy(t, terraformOptions)
 
@@ -303,7 +353,11 @@ func TestAcc_Force(t *testing.T) {
 			actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
 			aws.GetVpcById(t, actualVpcID, env.AWSRegion)
 
-			logBuffer, err := runBinary(t, terraformDir, "yes\n", tc.flags...)
+			tfstateFile, err := WriteRemoteStateToLocalFile(t, env, terraformOptions)
+			defer os.Remove(tfstateFile)
+
+			args := append(tc.flags, tfstateFile)
+			logBuffer, err := runBinary(t, "yes\n", args...)
 
 			if tc.expectedErrCode > 0 {
 				require.EqualError(t, err, "exit status 1")
@@ -341,15 +395,7 @@ func TestAcc_DeleteDependentResources(t *testing.T) {
 
 	terraformDir := "./test-fixtures/dependent-resources"
 
-	terraformOptions := &terraform.Options{
-		TerraformDir: terraformDir,
-		NoColor:      true,
-		Vars: map[string]interface{}{
-			"region":  env.AWSRegion,
-			"profile": env.AWSProfile,
-			"name":    "terradozer-" + strings.ToLower(random.UniqueId()),
-		},
-	}
+	terraformOptions := GetTerraformOptions(terraformDir, env)
 
 	defer terraform.Destroy(t, terraformOptions)
 
@@ -364,7 +410,10 @@ func TestAcc_DeleteDependentResources(t *testing.T) {
 	actualIamPolicyARN := terraform.Output(t, terraformOptions, "policy_arn")
 	AssertIamPolicyExists(t, env.AWSRegion, actualIamPolicyARN)
 
-	_, err := runBinary(t, terraformDir, "YES\n")
+	tfstateFile, err := WriteRemoteStateToLocalFile(t, env, terraformOptions)
+	defer os.Remove(tfstateFile)
+
+	_, err = runBinary(t, "YES\n", tfstateFile)
 	require.NoError(t, err)
 
 	AssertVpcDeleted(t, actualVpcID, env)
@@ -381,15 +430,7 @@ func TestAcc_SkipUnsupportedProvider(t *testing.T) {
 
 	terraformDir := "./test-fixtures/unsupported-provider"
 
-	terraformOptions := &terraform.Options{
-		TerraformDir: terraformDir,
-		NoColor:      true,
-		Vars: map[string]interface{}{
-			"region":  env.AWSRegion,
-			"profile": env.AWSProfile,
-			"name":    "terradozer-" + strings.ToLower(random.UniqueId()),
-		},
-	}
+	terraformOptions := GetTerraformOptions(terraformDir, env)
 
 	defer terraform.Destroy(t, terraformOptions)
 
@@ -398,7 +439,10 @@ func TestAcc_SkipUnsupportedProvider(t *testing.T) {
 	actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
 	aws.GetVpcById(t, actualVpcID, env.AWSRegion)
 
-	_, err := runBinary(t, terraformDir, "YES\n")
+	tfstateFile, err := WriteRemoteStateToLocalFile(t, env, terraformOptions)
+	defer os.Remove(tfstateFile)
+
+	_, err = runBinary(t, "YES\n", tfstateFile)
 	require.NoError(t, err)
 
 	AssertVpcDeleted(t, actualVpcID, env)
@@ -413,15 +457,7 @@ func TestAcc_DeleteTimeout(t *testing.T) {
 
 	terraformDir := "./test-fixtures/single-resource"
 
-	terraformOptions := &terraform.Options{
-		TerraformDir: terraformDir,
-		NoColor:      true,
-		Vars: map[string]interface{}{
-			"region":  env.AWSRegion,
-			"profile": env.AWSProfile,
-			"name":    "terradozer-" + strings.ToLower(random.UniqueId()),
-		},
-	}
+	terraformOptions := GetTerraformOptions(terraformDir, env)
 
 	defer terraform.Destroy(t, terraformOptions)
 
@@ -434,22 +470,17 @@ func TestAcc_DeleteTimeout(t *testing.T) {
 
 	terraformDirDependency := "./test-fixtures/single-resource/dependency"
 
-	terraformOptionsDependency := &terraform.Options{
-		TerraformDir: terraformDirDependency,
-		NoColor:      true,
-		Vars: map[string]interface{}{
-			"region":  env.AWSRegion,
-			"profile": env.AWSProfile,
-			"name":    "terradozer-" + strings.ToLower(random.UniqueId()),
-			"vpc_id":  actualVpcID,
-		},
-	}
+	terraformOptionsDependency := GetTerraformOptions(terraformDirDependency, env,
+		map[string]interface{}{"vpc_id": actualVpcID})
 
 	defer terraform.Destroy(t, terraformOptionsDependency)
 
 	terraform.InitAndApply(t, terraformOptionsDependency)
 
-	logBuffer, err := runBinary(t, terraformDir, "YES\n", "-timeout", "2s")
+	tfstateFile, err := WriteRemoteStateToLocalFile(t, env, terraformOptions)
+	defer os.Remove(tfstateFile)
+
+	logBuffer, err := runBinary(t, "YES\n", "-timeout", "2s", tfstateFile)
 	require.NoError(t, err)
 
 	actualLogs := logBuffer.String()
@@ -469,15 +500,7 @@ func TestAcc_DeleteNonEmptyAwsS3Bucket(t *testing.T) {
 
 	terraformDir := "./test-fixtures/non-empty-bucket"
 
-	terraformOptions := &terraform.Options{
-		TerraformDir: terraformDir,
-		NoColor:      true,
-		Vars: map[string]interface{}{
-			"region":  env.AWSRegion,
-			"profile": env.AWSProfile,
-			"name":    "terradozer-" + strings.ToLower(random.UniqueId()),
-		},
-	}
+	terraformOptions := GetTerraformOptions(terraformDir, env)
 
 	defer terraform.Destroy(t, terraformOptions)
 
@@ -486,7 +509,10 @@ func TestAcc_DeleteNonEmptyAwsS3Bucket(t *testing.T) {
 	actualBucketName := terraform.Output(t, terraformOptions, "bucket_name")
 	aws.AssertS3BucketExists(t, env.AWSRegion, actualBucketName)
 
-	_, err := runBinary(t, terraformDir, "YES\n")
+	tfstateFile, err := WriteRemoteStateToLocalFile(t, env, terraformOptions)
+	defer os.Remove(tfstateFile)
+
+	_, err = runBinary(t, "YES\n", tfstateFile)
 	require.NoError(t, err)
 
 	time.Sleep(5 * time.Second)
@@ -503,15 +529,7 @@ func TestAcc_DeleteAwsIamRoleWithAttachedPolicy(t *testing.T) {
 
 	terraformDir := "./test-fixtures/attached-policy"
 
-	terraformOptions := &terraform.Options{
-		TerraformDir: terraformDir,
-		NoColor:      true,
-		Vars: map[string]interface{}{
-			"region":  env.AWSRegion,
-			"profile": env.AWSProfile,
-			"name":    "terradozer-" + strings.ToLower(random.UniqueId()),
-		},
-	}
+	terraformOptions := GetTerraformOptions(terraformDir, env)
 
 	defer terraform.Destroy(t, terraformOptions)
 
@@ -520,22 +538,20 @@ func TestAcc_DeleteAwsIamRoleWithAttachedPolicy(t *testing.T) {
 	actualIamRole := terraform.Output(t, terraformOptions, "role_name")
 	AssertIamRoleExists(t, env.AWSRegion, actualIamRole)
 
-	_, err := runBinary(t, terraformDir, "YES\n")
+	tfstateFile, err := WriteRemoteStateToLocalFile(t, env, terraformOptions)
+	defer os.Remove(tfstateFile)
+
+	_, err = runBinary(t, "YES\n", tfstateFile)
 	require.NoError(t, err)
 
 	AssertIamRoleDeleted(t, actualIamRole, env)
 }
 
-func runBinary(t *testing.T, terraformDir, userInput string, flags ...string) (*bytes.Buffer, error) {
+func runBinary(t *testing.T, userInput string, args ...string) (*bytes.Buffer, error) {
 	defer gexec.CleanupBuildArtifacts()
 
 	compiledPath, err := gexec.Build(packagePath)
 	require.NoError(t, err)
-
-	args := []string{"-state", terraformDir + "/terraform.tfstate"}
-	for _, f := range flags {
-		args = append(args, f)
-	}
 
 	logBuffer := &bytes.Buffer{}
 

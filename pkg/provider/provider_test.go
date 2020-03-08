@@ -145,15 +145,7 @@ func TestTerraformProvider_ImportResource(t *testing.T) {
 
 	terraformDir := "../../test/test-fixtures/single-resource"
 
-	terraformOptions := &terraform.Options{
-		TerraformDir: terraformDir,
-		NoColor:      true,
-		Vars: map[string]interface{}{
-			"region":  env.AWSRegion,
-			"profile": env.AWSProfile,
-			"name":    "terradozer",
-		},
-	}
+	terraformOptions := test.GetTerraformOptions(terraformDir, env)
 
 	defer terraform.Destroy(t, terraformOptions)
 
@@ -201,17 +193,7 @@ func TestTerraformProvider_ReadResource(t *testing.T) {
 
 	terraformDir := "../../test/test-fixtures/single-resource"
 
-	testName := "terradozer"
-
-	terraformOptions := &terraform.Options{
-		TerraformDir: terraformDir,
-		NoColor:      true,
-		Vars: map[string]interface{}{
-			"region":  env.AWSRegion,
-			"profile": env.AWSProfile,
-			"name":    testName,
-		},
-	}
+	terraformOptions := test.GetTerraformOptions(terraformDir, env)
 
 	defer terraform.Destroy(t, terraformOptions)
 
@@ -249,7 +231,7 @@ func TestTerraformProvider_ReadResource(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, currentResourceState.GetAttr("tags"),
-		cty.MapVal(map[string]cty.Value{"Name": cty.StringVal(testName)}))
+		cty.MapVal(map[string]cty.Value{"Name": cty.StringVal(terraformOptions.Vars["name"].(string))}))
 
 	assert.Equal(t, currentResourceState.GetAttr("cidr_block"),
 		cty.StringVal("10.0.0.0/16"))

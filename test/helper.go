@@ -2,14 +2,22 @@
 package test
 
 import (
+	"fmt"
+	"io/ioutil"
+	"log"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/gruntwork-io/terratest/modules/aws"
+	"github.com/gruntwork-io/terratest/modules/random"
+	"github.com/gruntwork-io/terratest/modules/terraform"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+const testTfStateBucket = "terradozer-testacc-tfstate-492043"
 
 // EnvVars contains environment variables for that must be set for tests.
 type EnvVars struct {
@@ -35,6 +43,51 @@ func InitEnv(t *testing.T) EnvVars {
 		AWSProfile: profile,
 		AWSRegion:  region,
 	}
+}
+
+func GetTerraformOptions(terraformDir string, env EnvVars, optionalVars ...map[string]interface{}) *terraform.Options {
+	name := "terradozer-testacc-" + strings.ToLower(random.UniqueId())
+
+	vars := map[string]interface{}{
+		"region":  env.AWSRegion,
+		"profile": env.AWSProfile,
+		"name":    name,
+	}
+
+	if len(optionalVars) > 0 {
+		for k, v := range optionalVars[0] {
+			vars[k] = v
+		}
+	}
+
+	return &terraform.Options{
+		TerraformDir: terraformDir,
+		NoColor:      true,
+		Vars:         vars,
+		// BackendConfig defines where to store the Terraform state files of tests
+		BackendConfig: map[string]interface{}{
+			"bucket":  testTfStateBucket,
+			"key":     fmt.Sprintf("%s.tfstate", name),
+			"region":  env.AWSRegion,
+			"profile": env.AWSProfile,
+			"encrypt": true,
+		},
+	}
+}
+
+func WriteRemoteStateToLocalFile(t *testing.T, env EnvVars, terraformOptions *terraform.Options) (string, error) {
+	tfstate := aws.GetS3ObjectContents(t, env.AWSRegion,
+		terraformOptions.BackendConfig["bucket"].(string),
+		terraformOptions.BackendConfig["key"].(string))
+
+	localStatePath := fmt.Sprintf("%s/%s", os.TempDir(), terraformOptions.BackendConfig["key"].(string))
+
+	err := ioutil.WriteFile(localStatePath, []byte(tfstate), 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return localStatePath, err
 }
 
 // AssertIamRoleExists checks if the given IAM role exists in the given region and fail the test if it does not.
