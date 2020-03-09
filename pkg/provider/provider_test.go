@@ -252,13 +252,18 @@ func TestInitProviders(t *testing.T) {
 			name: "empty provider list input",
 		},
 		{
-			name:                  "single provider",
+			name:                  "single provider AWS",
 			providerNames:         []string{"aws"},
 			expectedProviderNames: []string{"aws"},
 		},
 		{
 			name:          "unknown provider",
 			providerNames: []string{"foo"},
+		},
+		{
+			name:                  "multiple providers AWS and GCP",
+			providerNames:         []string{"aws", "google"},
+			expectedProviderNames: []string{"aws", "google"},
 		},
 	}
 	for _, tc := range tests {
@@ -270,10 +275,13 @@ func TestInitProviders(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 
+				var actualProviderNames []string
 				for pName, p := range actualProviders {
 					assert.NotNil(t, p)
-					assert.Contains(t, tc.expectedProviderNames, pName)
+					actualProviderNames = append(actualProviderNames, pName)
 				}
+
+				assert.Equal(t, tc.expectedProviderNames, actualProviderNames)
 			}
 		})
 	}
