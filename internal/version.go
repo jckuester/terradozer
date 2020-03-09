@@ -5,10 +5,11 @@ import (
 	"runtime"
 )
 
+//nolint:gochecknoglobals
 var (
 	version = "dev"
-	commit  = ""
-	date    = ""
+	commit  = "?"
+	date    = "?"
 )
 
 func BuildVersionString() string {

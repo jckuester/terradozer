@@ -264,7 +264,13 @@ func TestAcc_DryRun(t *testing.T) {
 			tfstateFile, err := WriteRemoteStateToLocalFile(t, env, terraformOptions)
 			defer os.Remove(tfstateFile)
 
-			logBuffer, err := runBinary(t, "YES\n", tc.flag, tfstateFile)
+			args := []string{tfstateFile}
+			if tc.flag != "" {
+				args = []string{tc.flag, tfstateFile}
+			}
+
+			logBuffer, err := runBinary(t, "YES\n", args...)
+
 			require.NoError(t, err)
 
 			if tc.expectResourceIsDeleted {
