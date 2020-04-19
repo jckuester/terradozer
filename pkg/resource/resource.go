@@ -4,6 +4,10 @@ package resource
 import (
 	"fmt"
 
+	"github.com/hashicorp/terraform/configs/configschema"
+
+	"github.com/zclconf/go-cty/cty"
+
 	"github.com/apex/log"
 	"github.com/jckuester/terradozer/internal"
 	"github.com/jckuester/terradozer/pkg/provider"
@@ -51,40 +55,58 @@ func (r Resource) ID() string {
 
 // Destroy destroys a Terraform resource.
 func (r Resource) Destroy(dryRun bool) error {
-	importedResources, err := r.provider.ImportResource(r.terraformType, r.id)
+	resourceSchema, ok := r.provider.GetSchema().ResourceTypes[r.Type()]
+	if !ok {
+		return fmt.Errorf("failed to get schema for resource")
+	}
+
+	currentResourceState, err := r.provider.ReadResource(r.Type(), emptyValueWitID(r.ID(), resourceSchema.Block))
 	if err != nil {
-		return fmt.Errorf("failed to import resource: %s", err)
+		return fmt.Errorf("failed to read current state of resource: %s", err)
 	}
 
-	for _, rImported := range importedResources {
-		currentResourceState, err := r.provider.ReadResource(rImported)
-		if err != nil {
-			return fmt.Errorf("failed to read current state of resource: %s", err)
-		}
-
-		resourceNotFound := currentResourceState.IsNull()
-		if resourceNotFound {
-			return fmt.Errorf("resource found in state doesn't exist anymore")
-		}
-
-		if dryRun {
-			log.WithField("id", r.id).Warn(internal.Pad(r.terraformType))
-
-			return nil
-		}
-
-		err = r.provider.DestroyResource(r.terraformType, currentResourceState)
-		if err != nil {
-			log.WithError(err).WithFields(log.Fields{
-				"id": r.id, "type": r.terraformType}).Debug(internal.Pad("failed to delete resource"))
-
-			return NewRetryDestroyError(err, r)
-		}
-
-		log.WithField("id", r.id).Error(internal.Pad(r.terraformType))
+	resourceNotFound := currentResourceState.IsNull()
+	if resourceNotFound {
+		return fmt.Errorf("resource found in state doesn't exist anymore")
 	}
+
+	if dryRun {
+		log.WithField("id", r.id).Warn(internal.Pad(r.terraformType))
+
+		return nil
+	}
+
+	err = r.provider.DestroyResource(r.terraformType, currentResourceState)
+	if err != nil {
+		log.WithError(err).WithFields(log.Fields{
+			"id": r.id, "type": r.terraformType}).Debug(internal.Pad("failed to delete resource"))
+
+		return NewRetryDestroyError(err, r)
+	}
+
+	log.WithField("id", r.id).Error(internal.Pad(r.terraformType))
 
 	return nil
+}
+
+// emptyValueWitID returns a non-null object for the configuration block
+// where all of the attribute values are set to empty values except the ID attribute.
+//
+// see also github.com/hashicorp/terraform/configs/configschema/empty_value.go
+func emptyValueWitID(id string, block *configschema.Block) cty.Value {
+	vals := make(map[string]cty.Value)
+
+	for name, attrS := range block.Attributes {
+		vals[name] = attrS.EmptyValue()
+	}
+
+	for name, blockS := range block.BlockTypes {
+		vals[name] = blockS.EmptyValue()
+	}
+
+	vals["id"] = cty.StringVal(id)
+
+	return cty.ObjectVal(vals)
 }
 
 // DestroyResources destroys a given list of resources, which may depend on each other.

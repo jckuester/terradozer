@@ -14,7 +14,6 @@ import (
 
 	"github.com/gruntwork-io/terratest/modules/aws"
 	"github.com/gruntwork-io/terratest/modules/terraform"
-	"github.com/hashicorp/terraform/providers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zclconf/go-cty/cty"
@@ -205,9 +204,8 @@ func TestTerraformProvider_ReadResource(t *testing.T) {
 	p, err := provider.Init("aws", 15)
 	require.NoError(t, err)
 
-	currentResourceState, err := p.ReadResource(providers.ImportedResource{
-		TypeName: "aws_vpc",
-		State: cty.ObjectVal(map[string]cty.Value{
+	currentResourceState, err := p.ReadResource("aws_vpc",
+		cty.ObjectVal(map[string]cty.Value{
 			"arn":                              cty.NullVal(cty.String),
 			"assign_generated_ipv6_cidr_block": cty.False,
 			"cidr_block":                       cty.NullVal(cty.String),
@@ -226,8 +224,8 @@ func TestTerraformProvider_ReadResource(t *testing.T) {
 			"main_route_table_id":              cty.NullVal(cty.String),
 			"owner_id":                         cty.NullVal(cty.String),
 			"tags":                             cty.NullVal(cty.Map(cty.String)),
-		}),
-	})
+		}))
+
 	require.NoError(t, err)
 
 	assert.Equal(t, currentResourceState.GetAttr("tags"),

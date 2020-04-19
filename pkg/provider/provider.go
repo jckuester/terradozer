@@ -1,4 +1,4 @@
-// Package provider implements a client to call import, read, and destroy on any Terraform provider Plugin via GRPC.
+// Package provider implements a client to call destroy on any Terraform Provider Plugin via GRPC.
 package provider
 
 import (
@@ -31,6 +31,7 @@ const requestError = "RequestError"
 // provider is the interface that every Terraform Provider Plugin implements.
 type provider interface {
 	Configure(providers.ConfigureRequest) providers.ConfigureResponse
+	GetSchema() providers.GetSchemaResponse
 	ReadResource(providers.ReadResourceRequest) providers.ReadResourceResponse
 	ApplyResourceChange(providers.ApplyResourceChangeRequest) providers.ApplyResourceChangeResponse
 	ImportResourceState(providers.ImportResourceStateRequest) providers.ImportResourceStateResponse
@@ -108,18 +109,23 @@ func (p TerraformProvider) Configure(config cty.Value) error {
 	return respConf.Diagnostics.Err()
 }
 
+// GetSchema returns the schema for all resource types and the provider itself.
+func (p TerraformProvider) GetSchema() providers.GetSchemaResponse {
+	return p.provider.GetSchema()
+}
+
 // ImportResource imports a Terraform resource by type and ID.
 // Terraform Type and ID is the minimal information needed to uniquely identify a resource.
 // For example, call:
 //   ImportResource("aws_instance", "i-1234567890abcdef0")
 // The result is a resource which has only its ID set (all other attributes are empty).
-func (p TerraformProvider) ImportResource(terraformType string, resID string) ([]providers.ImportedResource, error) {
+func (p TerraformProvider) ImportResource(terraformType string, id string) ([]providers.ImportedResource, error) {
 	var response providers.ImportResourceStateResponse
 
 	err := resource.Retry(30*time.Second, func() *resource.RetryError {
 		response = p.ImportResourceState(providers.ImportResourceStateRequest{
 			TypeName: terraformType,
-			ID:       resID,
+			ID:       id,
 		})
 
 		if response.Diagnostics.HasErrors() {
@@ -144,16 +150,15 @@ func (p TerraformProvider) ImportResource(terraformType string, resID string) ([
 	return response.ImportedResources, nil
 }
 
-// ReadResource refreshes and sets all attributes of an imported resource.
-// This function is used to populate all attributes of a resource after import.
-func (p TerraformProvider) ReadResource(r providers.ImportedResource) (cty.Value, error) {
+// ReadResource refreshes all attributes of a resources.
+// For example, this function can be used to populate all attributes of a resource after import.
+func (p TerraformProvider) ReadResource(terraformType string, rState cty.Value) (cty.Value, error) {
 	var response providers.ReadResourceResponse
 
 	err := resource.Retry(30*time.Second, func() *resource.RetryError {
 		response = p.provider.ReadResource(providers.ReadResourceRequest{
-			TypeName:   r.TypeName,
-			PriorState: r.State,
-			Private:    r.Private,
+			TypeName:   terraformType,
+			PriorState: rState,
 		})
 
 		if response.Diagnostics.HasErrors() {
@@ -179,7 +184,7 @@ func (p TerraformProvider) ReadResource(r providers.ImportedResource) (cty.Value
 }
 
 // DestroyResource destroys a resource.
-// This function requires the current state of a resource as input (fetched via ReadResource).
+// This function requires the current state of a resource as input.
 func (p TerraformProvider) DestroyResource(terraformType string, currentState cty.Value) error {
 	var response providers.ApplyResourceChangeResponse
 

@@ -157,7 +157,6 @@ func TestAcc_AllResourcesAlreadyDeleted(t *testing.T) {
 	assert.NotContains(t, actualLogs, "TOTAL NUMBER OF DELETED RESOURCES: ")
 
 	fmt.Println(actualLogs)
-
 }
 
 func TestAcc_Version(t *testing.T) {
