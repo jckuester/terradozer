@@ -4,13 +4,11 @@ package resource
 import (
 	"fmt"
 
-	"github.com/hashicorp/terraform/configs/configschema"
-
-	"github.com/zclconf/go-cty/cty"
-
 	"github.com/apex/log"
+	"github.com/hashicorp/terraform/configs/configschema"
 	"github.com/jckuester/terradozer/internal"
 	"github.com/jckuester/terradozer/pkg/provider"
+	"github.com/zclconf/go-cty/cty"
 )
 
 // DestroyableResource implementations can destroy a Terraform resource.
@@ -55,38 +53,93 @@ func (r Resource) ID() string {
 
 // Destroy destroys a Terraform resource.
 func (r Resource) Destroy(dryRun bool) error {
-	resourceSchema, ok := r.provider.GetSchema().ResourceTypes[r.Type()]
-	if !ok {
-		return fmt.Errorf("failed to get schema for resource")
-	}
+	var resourcesAfterRead []resourceAfterRead
 
-	currentResourceState, err := r.provider.ReadResource(r.Type(), emptyValueWitID(r.ID(), resourceSchema.Block))
-	if err != nil {
-		return fmt.Errorf("failed to read current state of resource: %s", err)
-	}
-
-	resourceNotFound := currentResourceState.IsNull()
-	if resourceNotFound {
-		return fmt.Errorf("resource found in state doesn't exist anymore")
-	}
-
-	if dryRun {
-		log.WithField("id", r.id).Warn(internal.Pad(r.terraformType))
-
-		return nil
-	}
-
-	err = r.provider.DestroyResource(r.terraformType, currentResourceState)
+	resourcesAfterRead, err := importAndReadResource(r)
 	if err != nil {
 		log.WithError(err).WithFields(log.Fields{
-			"id": r.id, "type": r.terraformType}).Debug(internal.Pad("failed to delete resource"))
+			"id": r.id, "type": r.terraformType}).Debug(internal.Pad("failed to import resource; " +
+			"trying to read resource without import"))
 
-		return NewRetryDestroyError(err, r)
+		resourcesAfterRead, err = readResource(r)
+		if err != nil {
+			return fmt.Errorf("failed to read current state of resource: %s", err)
+		}
 	}
 
-	log.WithField("id", r.id).Error(internal.Pad(r.terraformType))
+	for _, rToRead := range resourcesAfterRead {
+		resourceNotFound := rToRead.State.IsNull()
+		if resourceNotFound {
+			return fmt.Errorf("resource found in state doesn't exist anymore")
+		}
+
+		if dryRun {
+			log.WithField("id", r.id).Warn(internal.Pad(r.terraformType))
+
+			return nil
+		}
+
+		err = r.provider.DestroyResource(r.terraformType, rToRead.State)
+		if err != nil {
+			log.WithError(err).WithFields(log.Fields{
+				"id": r.id, "type": r.terraformType}).Debug(internal.Pad("failed to delete resource"))
+
+			return NewRetryDestroyError(err, r)
+		}
+
+		log.WithField("id", r.id).Error(internal.Pad(r.terraformType))
+	}
 
 	return nil
+}
+
+type resourceAfterRead struct {
+	TerraformType string
+	State         cty.Value
+}
+
+func importAndReadResource(r Resource) ([]resourceAfterRead, error) {
+	var resourcesAfterRead []resourceAfterRead
+
+	importedResources, err := r.provider.ImportResource(r.terraformType, r.id)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, rImported := range importedResources {
+		currentResourceState, err := r.provider.ReadResource(rImported.TypeName, rImported.State)
+		if err != nil {
+			return nil, err
+		}
+
+		resourcesAfterRead = append(resourcesAfterRead, resourceAfterRead{
+			TerraformType: rImported.TypeName,
+			State:         currentResourceState,
+		})
+	}
+
+	return resourcesAfterRead, nil
+}
+
+func readResource(r Resource) ([]resourceAfterRead, error) {
+	var resourcesAfterRead []resourceAfterRead
+
+	schema, err := r.provider.GetSchemaForResource(r.terraformType)
+	if err != nil {
+		return nil, err
+	}
+
+	currentResourceState, err := r.provider.ReadResource(r.terraformType, emptyValueWitID(r.id, schema.Block))
+	if err != nil {
+		return nil, err
+	}
+
+	resourcesAfterRead = append(resourcesAfterRead, resourceAfterRead{
+		TerraformType: r.terraformType,
+		State:         currentResourceState,
+	})
+
+	return resourcesAfterRead, nil
 }
 
 // emptyValueWitID returns a non-null object for the configuration block

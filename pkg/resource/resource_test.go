@@ -143,9 +143,9 @@ func TestResource_Destroy(t *testing.T) {
 	}
 }
 
-// For this resource, Terraform import function uses the name as identifier,
+// For this resource, Terraform import function uses the name as an identifier,
 // but the id attribute set in the state is the ARN. Therefore, this resource
-// cannot be imported by ID.
+// cannot be imported by ID und must try to call read directly.
 func TestResource_AwsEcsCluster(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test.")
@@ -178,12 +178,11 @@ func TestResource_AwsEcsCluster(t *testing.T) {
 	test.AssertEcsClusterDeleted(t, env, actualID)
 }
 
-// For this resource under test, the read function cannot be used
-// to populate all resource attributes based on the ID.
+// For this resource under test, the read function cannot be used without
+// an import first to populate all resource attributes.
 //
-// The reason is that the read function for this resource uses the function_name attribute
-// (and not the ID attribute directly, which equals the name). This is a problem in Terraform code.
-// Therefore, this resource needs use import to populate attributes.
+// The reason is that the read function uses the function_name attribute
+// and not the ID attribute (although both are equal values).
 func TestResource_AwsLambdaFunction(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test.")

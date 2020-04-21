@@ -216,19 +216,22 @@ func lambdaFunctionExists(t *testing.T, env EnvVars, id string) bool {
 		if !ok {
 			t.Fatal(err)
 		}
+
 		if awsErr.Code() == "ResourceNotFoundException" {
 			return false
 		}
+
 		t.Fatal(err)
 	}
 
 	return true
 }
 
-// NewLambdaClientE creates a Lambda client.
+// NewLambdaClient creates a Lambda client.
 func NewLambdaClient(t *testing.T, region string) *lambda.Lambda {
 	client, err := NewLambdaClientE(region)
 	require.NoError(t, err)
+
 	return client
 }
 
@@ -238,5 +241,6 @@ func NewLambdaClientE(region string) (*lambda.Lambda, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return lambda.New(sess), nil
 }
