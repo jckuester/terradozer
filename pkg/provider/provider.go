@@ -1,4 +1,4 @@
-// Package provider implements a client to call destroy on any Terraform Provider Plugin via GRPC.
+// Package provider implements a client to call import, read, and destroy on any Terraform provider Plugin via GRPC.
 package provider
 
 import (
@@ -109,9 +109,16 @@ func (p TerraformProvider) Configure(config cty.Value) error {
 	return respConf.Diagnostics.Err()
 }
 
-// GetSchema returns the schema for all resource types and the provider itself.
-func (p TerraformProvider) GetSchema() providers.GetSchemaResponse {
-	return p.provider.GetSchema()
+// GetSchemaForResource returns the schema for a specific resource type.
+func (p TerraformProvider) GetSchemaForResource(terraformType string) (providers.Schema, error) {
+	schemas := p.provider.GetSchema()
+
+	resourceSchema, ok := schemas.ResourceTypes[terraformType]
+	if !ok {
+		return providers.Schema{}, fmt.Errorf("failed to get schema for resource")
+	}
+
+	return resourceSchema, nil
 }
 
 // ImportResource imports a Terraform resource by type and ID.

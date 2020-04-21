@@ -142,7 +142,7 @@ func TestTerraformProvider_ImportResource(t *testing.T) {
 
 	env := test.InitEnv(t)
 
-	terraformDir := "../../test/test-fixtures/single-resource"
+	terraformDir := "../../test/test-fixtures/single-resource/aws-vpc"
 
 	terraformOptions := test.GetTerraformOptions(terraformDir, env)
 
@@ -190,7 +190,7 @@ func TestTerraformProvider_ReadResource(t *testing.T) {
 
 	env := test.InitEnv(t)
 
-	terraformDir := "../../test/test-fixtures/single-resource"
+	terraformDir := "../../test/test-fixtures/single-resource/aws-vpc"
 
 	terraformOptions := test.GetTerraformOptions(terraformDir, env)
 

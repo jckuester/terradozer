@@ -115,7 +115,7 @@ func TestResource_Destroy(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			env := test.InitEnv(t)
 
-			terraformDir := "../../test/test-fixtures/single-resource"
+			terraformDir := "../../test/test-fixtures/single-resource/aws-vpc"
 
 			terraformOptions := test.GetTerraformOptions(terraformDir, env)
 
@@ -143,10 +143,81 @@ func TestResource_Destroy(t *testing.T) {
 	}
 }
 
+// For this resource, Terraform import function uses the name as an identifier,
+// but the id attribute set in the state is the ARN. Therefore, this resource
+// cannot be imported by ID und must try to call read directly.
+func TestResource_AwsEcsCluster(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test.")
+	}
+
+	log.SetLevel(log.DebugLevel)
+
+	env := test.InitEnv(t)
+
+	terraformDir := "../../test/test-fixtures/single-resource/aws-ecs-cluster"
+
+	terraformOptions := test.GetTerraformOptions(terraformDir, env)
+
+	defer terraform.Destroy(t, terraformOptions)
+
+	terraform.InitAndApply(t, terraformOptions)
+
+	actualID := terraform.Output(t, terraformOptions, "id")
+
+	test.AssertEcsClusterExists(t, env, actualID)
+
+	awsProvider, err := provider.Init("aws", 10*time.Second)
+	require.NoError(t, err)
+
+	resource := resource.New("aws_ecs_cluster", actualID, awsProvider)
+
+	err = resource.Destroy(false)
+	require.NoError(t, err)
+
+	test.AssertEcsClusterDeleted(t, env, actualID)
+}
+
+// For this resource under test, the read function cannot be used without
+// an import first to populate all resource attributes.
+//
+// The reason is that the read function uses the function_name attribute
+// and not the ID attribute (although both are equal values).
+func TestResource_AwsLambdaFunction(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test.")
+	}
+
+	log.SetLevel(log.DebugLevel)
+
+	env := test.InitEnv(t)
+
+	terraformDir := "../../test/test-fixtures/single-resource/aws-lambda-function"
+
+	terraformOptions := test.GetTerraformOptions(terraformDir, env)
+
+	defer terraform.Destroy(t, terraformOptions)
+
+	terraform.InitAndApply(t, terraformOptions)
+
+	actualID := terraform.Output(t, terraformOptions, "id")
+	test.AssertLambdaFunctionExists(t, env, actualID)
+
+	awsProvider, err := provider.Init("aws", 10*time.Second)
+	require.NoError(t, err)
+
+	resource := resource.New("aws_lambda_function", actualID, awsProvider)
+
+	err = resource.Destroy(false)
+	require.NoError(t, err)
+
+	test.AssertLambdaFunctionDeleted(t, env, actualID)
+}
+
 func TestResource_Destroy_Timeout(t *testing.T) {
 	env := test.InitEnv(t)
 
-	terraformDir := "../../test/test-fixtures/single-resource"
+	terraformDir := "../../test/test-fixtures/single-resource/aws-vpc"
 
 	terraformOptions := test.GetTerraformOptions(terraformDir, env)
 
@@ -159,7 +230,7 @@ func TestResource_Destroy_Timeout(t *testing.T) {
 
 	// apply dependency
 
-	terraformDirDependency := "../../test/test-fixtures/single-resource/dependency"
+	terraformDirDependency := "../../test/test-fixtures/single-resource/aws-vpc/dependency"
 
 	terraformOptionsDependency := test.GetTerraformOptions(terraformDirDependency, env,
 		map[string]interface{}{"vpc_id": actualVpcID})
