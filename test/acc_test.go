@@ -83,7 +83,7 @@ func TestAcc_ConfirmDeletion(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			env := InitEnv(t)
 
-			terraformDir := "./test-fixtures/single-resource"
+			terraformDir := "./test-fixtures/single-resource/aws-vpc"
 
 			terraformOptions := GetTerraformOptions(terraformDir, env)
 
@@ -128,7 +128,7 @@ func TestAcc_AllResourcesAlreadyDeleted(t *testing.T) {
 
 	env := InitEnv(t)
 
-	terraformDir := "./test-fixtures/single-resource"
+	terraformDir := "./test-fixtures/single-resource/aws-vpc"
 
 	terraformOptions := GetTerraformOptions(terraformDir, env)
 
@@ -249,7 +249,7 @@ func TestAcc_DryRun(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			env := InitEnv(t)
 
-			terraformDir := "./test-fixtures/single-resource"
+			terraformDir := "./test-fixtures/single-resource/aws-vpc"
 
 			terraformOptions := GetTerraformOptions(terraformDir, env)
 
@@ -347,7 +347,7 @@ func TestAcc_Force(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			env := InitEnv(t)
 
-			terraformDir := "./test-fixtures/single-resource"
+			terraformDir := "./test-fixtures/single-resource/aws-vpc"
 
 			terraformOptions := GetTerraformOptions(terraformDir, env)
 
@@ -460,7 +460,7 @@ func TestAcc_DeleteTimeout(t *testing.T) {
 
 	env := InitEnv(t)
 
-	terraformDir := "./test-fixtures/single-resource"
+	terraformDir := "./test-fixtures/single-resource/aws-vpc"
 
 	terraformOptions := GetTerraformOptions(terraformDir, env)
 
@@ -473,7 +473,7 @@ func TestAcc_DeleteTimeout(t *testing.T) {
 
 	// apply dependency
 
-	terraformDirDependency := "./test-fixtures/single-resource/dependency"
+	terraformDirDependency := "./test-fixtures/single-resource/aws-vpc/dependency"
 
 	terraformOptionsDependency := GetTerraformOptions(terraformDirDependency, env,
 		map[string]interface{}{"vpc_id": actualVpcID})
