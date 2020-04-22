@@ -7,6 +7,8 @@ import (
 	"os"
 	"sort"
 
+	"github.com/zclconf/go-cty/cty"
+
 	"github.com/jckuester/terradozer/pkg/resource"
 
 	"github.com/jckuester/terradozer/internal"
@@ -94,11 +96,25 @@ func (s *State) Resources(providers map[string]*provider.TerraformProvider) ([]r
 		log.WithField("absolute_address", resAddr.String()).
 			Debug(internal.Pad("looked up resource instance address"))
 
+		providerName := resAddr.Resource.Resource.DefaultProviderConfig().StringCompact()
+
+		p, ok := providers[providerName]
+		if !ok {
+			log.WithField("name", providerName).Debug(internal.Pad("Terraform provider not found in providers list"))
+
+			continue
+		}
+
 		resInstance := s.state.ResourceInstance(resAddr)
 
 		resID, err := getResourceID(resInstance)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get id for resource (addr=%s): %s", resAddr.String(), err)
+		}
+
+		resObject, err := getResourceObject(resInstance, resAddr.Resource.Resource.Type, p)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode resource into object (addr=%s): %s", resAddr.String(), err)
 		}
 
 		if resAddr.ContainingResource().Resource.Mode != addrs.ManagedResourceMode {
@@ -109,17 +125,8 @@ func (s *State) Resources(providers map[string]*provider.TerraformProvider) ([]r
 
 			continue
 		}
-
-		providerName := resAddr.Resource.Resource.DefaultProviderConfig().StringCompact()
-
-		p, ok := providers[providerName]
-		if !ok {
-			log.WithField("name", providerName).Debug(internal.Pad("Terraform provider not found in providers list"))
-
-			continue
-		}
-
-		resources = append(resources, resource.New(resAddr.Resource.Resource.Type, resID, p))
+		r := resource.NewWithState(resAddr.Resource.Resource.Type, resID, p, &resObject)
+		resources = append(resources, r)
 	}
 
 	return resources, nil
@@ -128,6 +135,22 @@ func (s *State) Resources(providers map[string]*provider.TerraformProvider) ([]r
 // resourceID represents the ID attribute of a Terraform resource.
 type resourceID struct {
 	ID string `json:"id"`
+}
+
+func getResourceObject(resInstance *states.ResourceInstance, rType string, provider *provider.TerraformProvider) (cty.Value, error) {
+	if !resInstance.HasCurrent() {
+		return cty.NilVal, fmt.Errorf("resource instance has no current object")
+	}
+
+	resourceSchema, err := provider.GetSchemaForResource(rType)
+	if err != nil {
+		return cty.NilVal, err
+	}
+	resInstanceObj, err := resInstance.Current.Decode(resourceSchema.Block.ImpliedType())
+	if err != nil {
+		return cty.NilVal, err
+	}
+	return resInstanceObj.Value, nil
 }
 
 // getResourceID looks up the resource ID amongst all resource attributes.

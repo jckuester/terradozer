@@ -26,6 +26,8 @@ type Resource struct {
 	id string
 	// provider is able to delete a resource
 	provider *provider.TerraformProvider
+	// internal Terraform state of the resource
+	state *cty.Value
 }
 
 // New creates a destroyable Terraform resource.
@@ -38,6 +40,15 @@ func New(terraformType, id string, provider *provider.TerraformProvider) *Resour
 		terraformType: terraformType,
 		id:            id,
 		provider:      provider,
+	}
+}
+
+func NewWithState(terraformType, id string, provider *provider.TerraformProvider, state *cty.Value) *Resource {
+	return &Resource{
+		terraformType: terraformType,
+		id:            id,
+		provider:      provider,
+		state:         state,
 	}
 }
 
@@ -55,16 +66,24 @@ func (r Resource) ID() string {
 func (r Resource) Destroy(dryRun bool) error {
 	var resourcesAfterRead []resourceAfterRead
 
-	resourcesAfterRead, err := importAndReadResource(r)
-	if err != nil {
-		log.WithError(err).WithFields(log.Fields{
-			"id": r.id, "type": r.terraformType}).Debug(internal.Pad("failed to import resource; " +
-			"trying to read resource without import"))
-
-		resourcesAfterRead, err = readResource(r)
+	if r.state != nil {
+		resourcesAfterRead = append(resourcesAfterRead, resourceAfterRead{
+			TerraformType: r.terraformType,
+			State:         *r.state,
+		})
+	} else {
+		resourcesAfterReadTmp, err := importAndReadResource(r)
 		if err != nil {
-			return fmt.Errorf("failed to read current state of resource: %s", err)
+			log.WithError(err).WithFields(log.Fields{
+				"id": r.id, "type": r.terraformType}).Debug(internal.Pad("failed to import resource; " +
+				"trying to read resource without import"))
+
+			resourcesAfterRead, err = readResource(r)
+			if err != nil {
+				return fmt.Errorf("failed to read current state of resource: %s", err)
+			}
 		}
+		resourcesAfterRead = resourcesAfterReadTmp
 	}
 
 	for _, rToRead := range resourcesAfterRead {
@@ -79,7 +98,7 @@ func (r Resource) Destroy(dryRun bool) error {
 			return nil
 		}
 
-		err = r.provider.DestroyResource(r.terraformType, rToRead.State)
+		err := r.provider.DestroyResource(r.terraformType, rToRead.State)
 		if err != nil {
 			log.WithError(err).WithFields(log.Fields{
 				"id": r.id, "type": r.terraformType}).Debug(internal.Pad("failed to delete resource"))
