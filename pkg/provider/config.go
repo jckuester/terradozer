@@ -11,7 +11,7 @@ import (
 func config(name string) (cty.Value, string, error) {
 	switch name {
 	case "aws":
-		return awsProviderConfig(), "2.43.0", nil
+		return awsProviderConfig(), "2.59.0", nil
 	default:
 		return cty.NilVal, "", fmt.Errorf("provider config not found: %s", name)
 	}

@@ -157,15 +157,15 @@ func (p TerraformProvider) ImportResource(terraformType string, id string) ([]pr
 	return response.ImportedResources, nil
 }
 
-// ReadResource refreshes all attributes of a resources.
+// ReadResource refreshes all attributes of a given resource state.
 // For example, this function can be used to populate all attributes of a resource after import.
-func (p TerraformProvider) ReadResource(terraformType string, rState cty.Value) (cty.Value, error) {
+func (p TerraformProvider) ReadResource(terraformType string, state cty.Value) (cty.Value, error) {
 	var response providers.ReadResourceResponse
 
 	err := resource.Retry(30*time.Second, func() *resource.RetryError {
 		response = p.provider.ReadResource(providers.ReadResourceRequest{
 			TypeName:   terraformType,
-			PriorState: rState,
+			PriorState: state,
 		})
 
 		if response.Diagnostics.HasErrors() {

@@ -1,7 +1,8 @@
 package main
 
-//go:generate mockgen -source=pkg/provider/provider.go -destination=pkg/resource/provider_mock_test.go -package=resource
-//go:generate mockgen -source=pkg/resource/resource.go -destination=pkg/resource/resource_mock_test.go -package=resource
+//nolint:lll
+//go:generate mockgen -source=pkg/provider/provider.go -destination=pkg/state/provider_mock_test.go -package=state_test
+//go:generate mockgen -source=pkg/resource/resource.go -destination=pkg/resource/resource_mock_test.go -package=resource_test
 
 import (
 	"flag"

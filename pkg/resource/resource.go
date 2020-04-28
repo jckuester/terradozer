@@ -16,6 +16,7 @@ type DestroyableResource interface {
 	Destroy(bool) error
 	Type() string
 	ID() string
+	State() *cty.Value
 }
 
 // Resource represents a Terraform resource that can be destroyed.
@@ -43,6 +44,8 @@ func New(terraformType, id string, provider *provider.TerraformProvider) *Resour
 	}
 }
 
+// NewWithState creates a destroyable Terraform resource which
+// contains the internal state representation of the resource.
 func NewWithState(terraformType, id string, provider *provider.TerraformProvider, state *cty.Value) *Resource {
 	return &Resource{
 		terraformType: terraformType,
@@ -62,103 +65,79 @@ func (r Resource) ID() string {
 	return r.id
 }
 
-// Destroy destroys a Terraform resource.
-func (r Resource) Destroy(dryRun bool) error {
-	var resourcesAfterRead []resourceAfterRead
+func (r Resource) State() *cty.Value {
+	return r.state
+}
 
+// UpdateState updates the state of the resource (i.e., refreshes all its attributes).
+// If the resource is already gone, the updated state will be nil.
+func (r *Resource) UpdateState() error {
 	if r.state != nil {
-		resourcesAfterRead = append(resourcesAfterRead, resourceAfterRead{
-			TerraformType: r.terraformType,
-			State:         *r.state,
-		})
-	} else {
-		resourcesAfterReadTmp, err := importAndReadResource(r)
+		// if the resource stores already a state representation, refresh that state
+		result, err := r.provider.ReadResource(r.terraformType, *r.state)
 		if err != nil {
-			log.WithError(err).WithFields(log.Fields{
-				"id": r.id, "type": r.terraformType}).Debug(internal.Pad("failed to import resource; " +
-				"trying to read resource without import"))
-
-			resourcesAfterRead, err = readResource(r)
-			if err != nil {
-				return fmt.Errorf("failed to read current state of resource: %s", err)
-			}
+			return err
 		}
-		resourcesAfterRead = resourcesAfterReadTmp
+
+		r.state = &result
+
+		return nil
 	}
 
-	for _, rToRead := range resourcesAfterRead {
-		resourceNotFound := rToRead.State.IsNull()
-		if resourceNotFound {
-			return fmt.Errorf("resource found in state doesn't exist anymore")
-		}
+	result, err := r.importAndReadResource()
+	if err != nil {
+		log.WithError(err).WithFields(log.Fields{
+			"id": r.id, "type": r.terraformType}).Debug(internal.Pad("failed to import resource; " +
+			"trying to read resource without import"))
 
-		if dryRun {
-			log.WithField("id", r.id).Warn(internal.Pad(r.terraformType))
-
-			return nil
-		}
-
-		err := r.provider.DestroyResource(r.terraformType, rToRead.State)
+		result, err = r.readResource()
 		if err != nil {
-			log.WithError(err).WithFields(log.Fields{
-				"id": r.id, "type": r.terraformType}).Debug(internal.Pad("failed to delete resource"))
-
-			return NewRetryDestroyError(err, r)
+			return fmt.Errorf("failed to read current state of resource: %s", err)
 		}
-
-		log.WithField("id", r.id).Error(internal.Pad(r.terraformType))
 	}
+
+	r.state = &result
 
 	return nil
 }
 
-type resourceAfterRead struct {
-	TerraformType string
-	State         cty.Value
-}
-
-func importAndReadResource(r Resource) ([]resourceAfterRead, error) {
-	var resourcesAfterRead []resourceAfterRead
-
+func (r Resource) importAndReadResource() (cty.Value, error) {
 	importedResources, err := r.provider.ImportResource(r.terraformType, r.id)
 	if err != nil {
-		return nil, err
+		return cty.NilVal, err
 	}
 
 	for _, rImported := range importedResources {
 		currentResourceState, err := r.provider.ReadResource(rImported.TypeName, rImported.State)
 		if err != nil {
-			return nil, err
+			return cty.NilVal, err
 		}
 
-		resourcesAfterRead = append(resourcesAfterRead, resourceAfterRead{
-			TerraformType: rImported.TypeName,
-			State:         currentResourceState,
-		})
+		if rImported.TypeName == r.terraformType {
+			return currentResourceState, nil
+		}
+
+		log.WithError(err).WithFields(log.Fields{
+			"type": rImported.TypeName,
+		}).Debug(internal.Pad("found multiple resources during import"))
 	}
 
-	return resourcesAfterRead, nil
+	return cty.NilVal, fmt.Errorf("no resource found to be imported")
 }
 
-func readResource(r Resource) ([]resourceAfterRead, error) {
-	var resourcesAfterRead []resourceAfterRead
-
+// readResource fetches the current state of a resource based on its ID attribute.
+func (r Resource) readResource() (cty.Value, error) {
 	schema, err := r.provider.GetSchemaForResource(r.terraformType)
 	if err != nil {
-		return nil, err
+		return cty.NilVal, err
 	}
 
 	currentResourceState, err := r.provider.ReadResource(r.terraformType, emptyValueWitID(r.id, schema.Block))
 	if err != nil {
-		return nil, err
+		return cty.NilVal, err
 	}
 
-	resourcesAfterRead = append(resourcesAfterRead, resourceAfterRead{
-		TerraformType: r.terraformType,
-		State:         currentResourceState,
-	})
-
-	return resourcesAfterRead, nil
+	return currentResourceState, nil
 }
 
 // emptyValueWitID returns a non-null object for the configuration block
@@ -179,6 +158,37 @@ func emptyValueWitID(id string, block *configschema.Block) cty.Value {
 	vals["id"] = cty.StringVal(id)
 
 	return cty.ObjectVal(vals)
+}
+
+// Destroy destroys a Terraform resource.
+func (r Resource) Destroy(dryRun bool) error {
+	err := r.UpdateState()
+	if err != nil {
+		return fmt.Errorf("failed to update state: %s", err)
+	}
+
+	resourceNotFound := r.state.IsNull()
+	if resourceNotFound {
+		return fmt.Errorf("resource found in state doesn't exist anymore")
+	}
+
+	if dryRun {
+		log.WithField("id", r.id).Warn(internal.Pad(r.terraformType))
+
+		return nil
+	}
+
+	err = r.provider.DestroyResource(r.terraformType, *r.state)
+	if err != nil {
+		log.WithError(err).WithFields(log.Fields{
+			"id": r.id, "type": r.terraformType}).Debug(internal.Pad("failed to delete resource"))
+
+		return NewRetryDestroyError(err, r)
+	}
+
+	log.WithField("id", r.id).Error(internal.Pad(r.terraformType))
+
+	return nil
 }
 
 // DestroyResources destroys a given list of resources, which may depend on each other.

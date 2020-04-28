@@ -67,7 +67,7 @@ func TestDestroyResources(t *testing.T) {
 
 			var resources []resource.DestroyableResource
 			for rType, numOfFailedDeletions := range tc.failedDeletions {
-				m := resource.NewMockDestroyableResource(ctrl)
+				m := NewMockDestroyableResource(ctrl)
 
 				resFailedDeletions := m.EXPECT().Destroy(gomock.Any()).
 					Return(resource.NewRetryDestroyError(fmt.Errorf("some error"),
@@ -129,9 +129,9 @@ func TestResource_Destroy(t *testing.T) {
 			awsProvider, err := provider.Init("aws", 10*time.Second)
 			require.NoError(t, err)
 
-			resource := resource.New("aws_vpc", actualVpcID, awsProvider)
+			r := resource.New("aws_vpc", actualVpcID, awsProvider)
 
-			err = resource.Destroy(tc.dryRun)
+			err = r.Destroy(tc.dryRun)
 			require.NoError(t, err)
 
 			if tc.expectResourceIsDeleted {
@@ -170,9 +170,9 @@ func TestResource_AwsEcsCluster(t *testing.T) {
 	awsProvider, err := provider.Init("aws", 10*time.Second)
 	require.NoError(t, err)
 
-	resource := resource.New("aws_ecs_cluster", actualID, awsProvider)
+	r := resource.New("aws_ecs_cluster", actualID, awsProvider)
 
-	err = resource.Destroy(false)
+	err = r.Destroy(false)
 	require.NoError(t, err)
 
 	test.AssertEcsClusterDeleted(t, env, actualID)
@@ -206,9 +206,9 @@ func TestResource_AwsLambdaFunction(t *testing.T) {
 	awsProvider, err := provider.Init("aws", 10*time.Second)
 	require.NoError(t, err)
 
-	resource := resource.New("aws_lambda_function", actualID, awsProvider)
+	r := resource.New("aws_lambda_function", actualID, awsProvider)
 
-	err = resource.Destroy(false)
+	err = r.Destroy(false)
 	require.NoError(t, err)
 
 	test.AssertLambdaFunctionDeleted(t, env, actualID)
@@ -242,8 +242,8 @@ func TestResource_Destroy_Timeout(t *testing.T) {
 	awsProvider, err := provider.Init("aws", 5*time.Second)
 	require.NoError(t, err)
 
-	resource := resource.New("aws_vpc", actualVpcID, awsProvider)
+	r := resource.New("aws_vpc", actualVpcID, awsProvider)
 
-	err = resource.Destroy(false)
+	err = r.Destroy(false)
 	assert.EqualError(t, err, "destroy timed out (5s)")
 }
