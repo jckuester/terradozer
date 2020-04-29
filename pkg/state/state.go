@@ -7,15 +7,14 @@ import (
 	"os"
 	"sort"
 
-	"github.com/jckuester/terradozer/pkg/resource"
-
-	"github.com/jckuester/terradozer/internal"
-	"github.com/jckuester/terradozer/pkg/provider"
-
 	"github.com/apex/log"
 	"github.com/hashicorp/terraform/addrs"
 	"github.com/hashicorp/terraform/states"
 	"github.com/hashicorp/terraform/states/statefile"
+	"github.com/jckuester/terradozer/internal"
+	"github.com/jckuester/terradozer/pkg/provider"
+	"github.com/jckuester/terradozer/pkg/resource"
+	"github.com/zclconf/go-cty/cty"
 )
 
 // State represents a Terraform state.
@@ -119,7 +118,13 @@ func (s *State) Resources(providers map[string]*provider.TerraformProvider) ([]r
 			continue
 		}
 
-		resources = append(resources, resource.New(resAddr.Resource.Resource.Type, resID, p))
+		resObject, err := getResourceState(resInstance, resAddr.Resource.Resource.Type, p)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode resource into object (addr=%s): %s", resAddr.String(), err)
+		}
+
+		r := resource.NewWithState(resAddr.Resource.Resource.Type, resID, p, &resObject)
+		resources = append(resources, r)
 	}
 
 	return resources, nil
@@ -158,6 +163,27 @@ func getResourceID(resInstance *states.ResourceInstance) (string, error) {
 	}
 
 	return resInstance.Current.AttrsFlat["id"], nil
+}
+
+// getResourceState unmarshals the JSON representation of a resource found in the state file into
+// an internal Terraform state object representation.
+func getResourceState(resInstance *states.ResourceInstance, rType string,
+	provider *provider.TerraformProvider) (cty.Value, error) {
+	if !resInstance.HasCurrent() {
+		return cty.NilVal, fmt.Errorf("resource instance has no current object")
+	}
+
+	resourceSchema, err := provider.GetSchemaForResource(rType)
+	if err != nil {
+		return cty.NilVal, err
+	}
+
+	resInstanceObj, err := resInstance.Current.Decode(resourceSchema.Block.ImpliedType())
+	if err != nil {
+		return cty.NilVal, err
+	}
+
+	return resInstanceObj.Value, nil
 }
 
 // copied (and modified) from github.com/hashicorp/terraform/command/state_meta.go

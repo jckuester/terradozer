@@ -14,7 +14,7 @@ terraform {
 resource "aws_subnet" "test" {
   availability_zone = "us-west-2b"
 
-  vpc_id = var.vpc_id
+  vpc_id     = var.vpc_id
   cidr_block = "10.0.1.0/24"
 
   tags = {

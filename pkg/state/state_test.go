@@ -2,6 +2,11 @@ package state_test
 
 import (
 	"testing"
+	"time"
+
+	"github.com/zclconf/go-cty/cty"
+
+	"github.com/jckuester/terradozer/test"
 
 	"github.com/jckuester/terradozer/pkg/state"
 
@@ -98,6 +103,15 @@ func TestState_ProviderNames(t *testing.T) {
 }
 
 func TestState_Resources(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test.")
+	}
+
+	test.InitEnv(t)
+
+	awsProvider, err := provider.Init("aws", 10*time.Second)
+	require.NoError(t, err)
+
 	tests := []struct {
 		name              string
 		pathToState       string
@@ -113,48 +127,23 @@ func TestState_Resources(t *testing.T) {
 			name:        "single AWS resource",
 			pathToState: "../../test/test-fixtures/tfstates/version3.tfstate",
 			providers: map[string]*provider.TerraformProvider{
-				"aws": {},
+				"aws": awsProvider,
 			},
 			expectedResources: []resource.DestroyableResource{
 				resource.New("aws_vpc",
 					"vpc-003104c0d87e7a9f4",
-					&provider.TerraformProvider{}),
-			},
-		},
-		{
-			name:        "resources from multiple providers",
-			pathToState: "../../test/test-fixtures/tfstates/multiple-providers.tfstate",
-			providers: map[string]*provider.TerraformProvider{
-				"aws":    {},
-				"random": {},
-			},
-			expectedResources: []resource.DestroyableResource{
-				resource.New("aws_vpc",
-					"vpc-039b3d3fb4ffcf0ea",
-					&provider.TerraformProvider{}),
-				resource.New(
-					"random_integer",
-					"12375",
-					&provider.TerraformProvider{}),
+					awsProvider),
 			},
 		},
 		{
 			name:        "data source",
 			pathToState: "../../test/test-fixtures/tfstates/datasource.tfstate",
-			providers:   map[string]*provider.TerraformProvider{"aws": nil},
-		},
-		{
-			name:        "state with missing resource ID",
-			pathToState: "../../test/test-fixtures/tfstates/missing-id.tfstate",
-			providers:   map[string]*provider.TerraformProvider{"aws": nil},
-			expectedResources: []resource.DestroyableResource{
-				resource.New("aws_vpc", "", nil),
-			},
+			providers:   map[string]*provider.TerraformProvider{"aws": awsProvider},
 		},
 		{
 			name:        "empty state",
 			pathToState: "../../test/test-fixtures/tfstates/empty.tfstate",
-			providers:   map[string]*provider.TerraformProvider{"aws": nil},
+			providers:   map[string]*provider.TerraformProvider{"aws": awsProvider},
 		},
 	}
 	for _, tc := range tests {
@@ -170,49 +159,16 @@ func TestState_Resources(t *testing.T) {
 					assert.EqualError(t, err, tc.expectedErrMsg)
 				} else {
 					require.NoError(t, err)
-					assert.Equal(t, tc.expectedResources, actualResources)
+					require.True(t, len(actualResources) == len(tc.expectedResources))
+
+					for _, rExpected := range tc.expectedResources {
+						for _, rActual := range actualResources {
+							assert.Equal(t, rExpected.Type(), rActual.Type())
+							assert.Equal(t, rExpected.ID(), rActual.ID())
+							assert.Equal(t, cty.StringVal(rExpected.ID()), rActual.State().GetAttr("id"))
+						}
+					}
 				}
-			}
-		})
-	}
-}
-
-func Test_getResourceID(t *testing.T) {
-	tests := []struct {
-		name           string
-		pathToState    string
-		expectedID     string
-		expectedErrMsg string
-	}{
-		{
-			name:        "state version 3",
-			pathToState: "../../test/test-fixtures/tfstates/version3.tfstate",
-			expectedID:  "vpc-003104c0d87e7a9f4",
-		},
-		{
-			name:        "state version 4",
-			pathToState: "../../test/test-fixtures/tfstates/version4.tfstate",
-			expectedID:  "vpc-034efaa028f36357d",
-		},
-		{
-			name:        "state with missing resource ID",
-			pathToState: "../../test/test-fixtures/tfstates/missing-id.tfstate",
-			expectedID:  "",
-		},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			state, err := state.New(tc.pathToState)
-			require.NoError(t, err)
-
-			resources, err := state.Resources(map[string]*provider.TerraformProvider{"aws": nil})
-			require.Len(t, resources, 1)
-
-			if tc.expectedErrMsg != "" {
-				assert.EqualError(t, err, tc.expectedErrMsg)
-			} else {
-				require.NoError(t, err)
-				assert.Equal(t, tc.expectedID, resources[0].ID())
 			}
 		})
 	}
