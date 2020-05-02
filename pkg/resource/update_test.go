@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/apex/log"
 	"github.com/golang/mock/gomock"
 	"github.com/jckuester/terradozer/pkg/resource"
@@ -83,12 +85,8 @@ func TestUpdateResources(t *testing.T) {
 			for _, r := range tc.resourceToUpdate {
 				m := NewMockDestroyableResource(ctrl)
 
-				m.EXPECT().UpdateState().
-					Return(nil).Times(1)
-
-				m.EXPECT().Destroy().
-					Return(nil).Times(0)
-
+				m.EXPECT().UpdateState().Return(nil).Times(1)
+				m.EXPECT().Destroy().Return(nil).Times(0)
 				m.EXPECT().ID().Return(r.ID()).AnyTimes()
 				m.EXPECT().Type().Return(r.Type()).AnyTimes()
 				m.EXPECT().State().Return(&cty.DynamicVal).AnyTimes()
@@ -112,17 +110,25 @@ func TestUpdateResources_UpdateError(t *testing.T) {
 
 	m := NewMockDestroyableResource(ctrl)
 
-	m.EXPECT().UpdateState().
-		Return(fmt.Errorf("some error")).Times(1)
-
-	m.EXPECT().Destroy().
-		Return(nil).Times(0)
-
+	m.EXPECT().UpdateState().Return(nil).Times(1)
+	m.EXPECT().Destroy().Return(nil).Times(0)
 	m.EXPECT().ID().Return("id-1234").AnyTimes()
 	m.EXPECT().Type().Return("aws_vpc").AnyTimes()
 
-	actualUpdatedResources := resource.UpdateResources([]resource.DestroyableResource{m}, 3)
-	assert.Len(t, actualUpdatedResources, 0)
+	mUpdateError := NewMockDestroyableResource(ctrl)
+
+	mUpdateError.EXPECT().UpdateState().Return(fmt.Errorf("some error")).Times(1)
+	mUpdateError.EXPECT().Destroy().Return(nil).Times(0)
+	mUpdateError.EXPECT().ID().Return("id-3456").AnyTimes()
+	mUpdateError.EXPECT().Type().Return("aws_subnet").AnyTimes()
+
+	actualUpdatedResources := resource.UpdateResources([]resource.DestroyableResource{m, mUpdateError}, 3)
+	require.Len(t, actualUpdatedResources, 1)
+
+	assert.Equal(t, "aws_vpc", actualUpdatedResources[0].Type())
+	assert.Equal(t, "id-1234", actualUpdatedResources[0].ID())
+
+	ctrl.Finish()
 }
 
 func TestUpdateResources_StateIsNil(t *testing.T) {
@@ -132,16 +138,25 @@ func TestUpdateResources_StateIsNil(t *testing.T) {
 
 	m := NewMockDestroyableResource(ctrl)
 
-	m.EXPECT().UpdateState().
-		Return(nil).Times(1)
-	m.EXPECT().State().Return(&cty.NilVal).AnyTimes()
-
-	m.EXPECT().Destroy().
-		Return(nil).Times(0)
-
+	m.EXPECT().UpdateState().Return(nil).Times(1)
+	m.EXPECT().Destroy().Return(nil).Times(0)
 	m.EXPECT().ID().Return("id-1234").AnyTimes()
 	m.EXPECT().Type().Return("aws_vpc").AnyTimes()
+	m.EXPECT().State().Return(&cty.DynamicVal).AnyTimes()
 
-	actualUpdatedResources := resource.UpdateResources([]resource.DestroyableResource{m}, 3)
-	assert.Len(t, actualUpdatedResources, 0)
+	mNilState := NewMockDestroyableResource(ctrl)
+
+	mNilState.EXPECT().UpdateState().Return(nil).Times(1)
+	mNilState.EXPECT().Destroy().Return(nil).Times(0)
+	mNilState.EXPECT().ID().Return("id-3456").AnyTimes()
+	mNilState.EXPECT().Type().Return("aws_subnet").AnyTimes()
+	mNilState.EXPECT().State().Return(&cty.NilVal).AnyTimes()
+
+	actualUpdatedResources := resource.UpdateResources([]resource.DestroyableResource{m, mNilState}, 2)
+	require.Len(t, actualUpdatedResources, 1)
+
+	assert.Equal(t, "aws_vpc", actualUpdatedResources[0].Type())
+	assert.Equal(t, "id-1234", actualUpdatedResources[0].ID())
+
+	ctrl.Finish()
 }
