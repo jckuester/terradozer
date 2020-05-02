@@ -114,6 +114,7 @@ func TestUpdateResources_UpdateError(t *testing.T) {
 	m.EXPECT().Destroy().Return(nil).Times(0)
 	m.EXPECT().ID().Return("id-1234").AnyTimes()
 	m.EXPECT().Type().Return("aws_vpc").AnyTimes()
+	m.EXPECT().State().Return(&cty.DynamicVal).AnyTimes()
 
 	mUpdateError := NewMockDestroyableResource(ctrl)
 

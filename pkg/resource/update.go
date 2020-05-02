@@ -13,14 +13,15 @@ import (
 // Only updated resources are returned which still exist remotely (e.g., in AWS).
 func UpdateResources(resources []DestroyableResource, parallel int) []DestroyableResource {
 	numOfResourcesToUpdate := len(resources)
+
 	var updatedResources []DestroyableResource
 
 	jobQueue := make(chan DestroyableResource, numOfResourcesToUpdate)
 
-	workerResults := make(chan *DestroyableResource, numOfResourcesToUpdate)
+	workerResults := make(chan updateWorkerResult, numOfResourcesToUpdate)
 
 	for workerID := 1; workerID <= parallel; workerID++ {
-		go updateWorker(workerID, jobQueue, workerResults)
+		go updateWorker(jobQueue, workerResults)
 	}
 
 	for _, r := range resources {
@@ -32,44 +33,45 @@ func UpdateResources(resources []DestroyableResource, parallel int) []Destroyabl
 	for i := 1; i <= numOfResourcesToUpdate; i++ {
 		r := <-workerResults
 
-		if r != nil {
-			updatedResources = append(updatedResources, *r)
+		if r.err != nil {
+			log.WithError(r.err).WithFields(log.Fields{
+				"type":        r.resource.Type(),
+				"resource_id": r.resource.ID(),
+			}).Info(internal.Pad("cannot refresh resource state"))
+
+			continue
 		}
+
+		updatedResources = append(updatedResources, r.resource)
 	}
 
 	return updatedResources
 }
 
+type updateWorkerResult struct {
+	resource DestroyableResource
+	// err is set if update failed.
+	err error
+}
+
 // updateWorker is a worker that updates the state of a resource.
-func updateWorker(id int, resources <-chan DestroyableResource, result chan<- *DestroyableResource) {
+func updateWorker(resources <-chan DestroyableResource, result chan<- updateWorkerResult) {
 	for r := range resources {
 		err := r.UpdateState()
 		if err != nil {
-			log.WithError(err).WithFields(log.Fields{
-				"worker_id":   id,
-				"type":        r.Type(),
-				"resource_id": r.ID(),
-			}).Debug(internal.Pad("failed to update resource"))
-
-			result <- nil
+			result <- updateWorkerResult{resource: r, err: err}
 
 			continue
 		}
 
 		resourceNotFound := r.State().IsNull()
 		if resourceNotFound {
-			log.WithFields(log.Fields{
-				"worker_id": id,
-				"type":      r.Type(),
-				"id":        r.ID(),
-			}).Debug(internal.Pad("resource doesn't exist anymore"))
-
-			result <- nil
+			result <- updateWorkerResult{resource: r, err: fmt.Errorf("resource doesn't exist anymore")}
 
 			continue
 		}
 
-		result <- &r
+		result <- updateWorkerResult{resource: r, err: nil}
 	}
 }
 
@@ -80,7 +82,7 @@ func (r *Resource) UpdateState() error {
 		// if the resource stores already a state representation, refresh that state
 		result, err := r.provider.ReadResource(r.terraformType, *r.state)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to read current state of resource: %s", err)
 		}
 
 		r.state = &result
@@ -96,7 +98,7 @@ func (r *Resource) UpdateState() error {
 
 		result, err = r.readResource()
 		if err != nil {
-			return fmt.Errorf("failed to read current state of resource: %s", err)
+			return err
 		}
 	}
 
@@ -138,7 +140,7 @@ func (r Resource) readResource() (cty.Value, error) {
 
 	currentResourceState, err := r.provider.ReadResource(r.terraformType, emptyValueWitID(r.id, schema.Block))
 	if err != nil {
-		return cty.NilVal, err
+		return cty.NilVal, fmt.Errorf("failed to read current state of resource: %s", err)
 	}
 
 	return currentResourceState, nil
