@@ -116,18 +116,23 @@ func mainExitCode() int {
 		return 1
 	}
 
+	resourcesWithUpdatedState := resource.UpdateResources(resources, parallel)
+
 	if !force {
 		internal.LogTitle("showing resources that would be deleted (dry run)")
 
 		// always show the resources that would be affected before deleting anything
-		numDeletedResources := resource.DestroyResources(resources, true, parallel)
+		for _, r := range resourcesWithUpdatedState {
+			log.WithField("id", r.ID()).Warn(internal.Pad(r.Type()))
+		}
 
-		if numDeletedResources == 0 {
+		if len(resourcesWithUpdatedState) == 0 {
 			internal.LogTitle("all resources have already been deleted")
 			return 0
 		}
 
-		internal.LogTitle(fmt.Sprintf("total number of resources that would be deleted: %d", numDeletedResources))
+		internal.LogTitle(fmt.Sprintf("total number of resources that would be deleted: %d",
+			len(resourcesWithUpdatedState)))
 	}
 
 	if !dryRun {
@@ -137,7 +142,7 @@ func mainExitCode() int {
 
 		internal.LogTitle("Starting to delete resources")
 
-		numDeletedResources := resource.DestroyResources(resources, false, parallel)
+		numDeletedResources := resource.DestroyResources(resourcesWithUpdatedState, parallel)
 
 		internal.LogTitle(fmt.Sprintf("total number of deleted resources: %d", numDeletedResources))
 	}
