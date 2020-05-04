@@ -82,12 +82,12 @@ func removeDuplicates(elements []string) []string {
 	return result
 }
 
-// Resources returns a list of all destroyable resources in the state that are managed by one of the given providers.
+// Resources returns a list of resources in the state that are managed by one of the given providers.
 //
 // Data sources are not returned as these are managed outside the scope of the state and
 // therefore shouldn't be destroyed.
-func (s *State) Resources(providers map[string]*provider.TerraformProvider) ([]resource.DestroyableResource, error) {
-	var resources []resource.DestroyableResource
+func (s *State) Resources(providers map[string]*provider.TerraformProvider) ([]resource.UpdatableResource, error) {
+	var resources []resource.UpdatableResource
 
 	for _, resAddr := range lookupAllResourceInstanceAddrs(s.state) {
 		log.WithField("absolute_address", resAddr.String()).

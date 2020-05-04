@@ -86,11 +86,10 @@ func TestDestroyResources(t *testing.T) {
 				m := NewMockDestroyableResource(ctrl)
 
 				resFailedDeletions := m.EXPECT().Destroy().
-					Return(resource.NewRetryDestroyError(fmt.Errorf("some error"),
-						m)).MaxTimes(numOfFailedDeletions)
+					Return(resource.NewRetryDestroyError(fmt.Errorf("some error"), m)).
+					MaxTimes(numOfFailedDeletions)
 
-				m.EXPECT().Destroy().
-					Return(nil).After(resFailedDeletions).AnyTimes()
+				m.EXPECT().Destroy().Return(nil).After(resFailedDeletions).AnyTimes()
 
 				m.EXPECT().ID().Return("1234").AnyTimes()
 				m.EXPECT().Type().Return(rType).AnyTimes()

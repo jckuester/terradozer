@@ -7,6 +7,13 @@ import (
 	"github.com/jckuester/terradozer/internal"
 )
 
+// DestroyableResource implementations can destroy a Terraform resource.
+type DestroyableResource interface {
+	Destroy() error
+	Type() string
+	ID() string
+}
+
 // DestroyResources destroys a given list of resources, which may depend on each other.
 //
 // If at least one resource is successfully destroyed per run (iteration through the list of given resources),

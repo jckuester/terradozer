@@ -9,14 +9,22 @@ import (
 	"github.com/zclconf/go-cty/cty"
 )
 
+// UpdatableResource implementations can update a Terraform resource's state.
+type UpdatableResource interface {
+	Type() string
+	ID() string
+	State() *cty.Value
+	UpdateState() error
+}
+
 // UpdateResources updates the state of a given list of resources in parallel.
 // Only updated resources are returned which still exist remotely (e.g., in AWS).
-func UpdateResources(resources []DestroyableResource, parallel int) []DestroyableResource {
+func UpdateResources(resources []UpdatableResource, parallel int) []UpdatableResource {
 	numOfResourcesToUpdate := len(resources)
 
-	var updatedResources []DestroyableResource
+	var updatedResources []UpdatableResource
 
-	jobQueue := make(chan DestroyableResource, numOfResourcesToUpdate)
+	jobQueue := make(chan UpdatableResource, numOfResourcesToUpdate)
 
 	workerResults := make(chan updateWorkerResult, numOfResourcesToUpdate)
 
@@ -49,13 +57,13 @@ func UpdateResources(resources []DestroyableResource, parallel int) []Destroyabl
 }
 
 type updateWorkerResult struct {
-	resource DestroyableResource
+	resource UpdatableResource
 	// err is set if update failed.
 	err error
 }
 
 // updateWorker is a worker that updates the state of a resource.
-func updateWorker(resources <-chan DestroyableResource, result chan<- updateWorkerResult) {
+func updateWorker(resources <-chan UpdatableResource, result chan<- updateWorkerResult) {
 	for r := range resources {
 		err := r.UpdateState()
 		if err != nil {

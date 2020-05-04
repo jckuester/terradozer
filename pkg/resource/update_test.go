@@ -81,12 +81,11 @@ func TestUpdateResources(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 
-			var resources []resource.DestroyableResource
+			var resources []resource.UpdatableResource
 			for _, r := range tc.resourceToUpdate {
-				m := NewMockDestroyableResource(ctrl)
+				m := NewMockUpdatableResource(ctrl)
 
 				m.EXPECT().UpdateState().Return(nil).Times(1)
-				m.EXPECT().Destroy().Return(nil).Times(0)
 				m.EXPECT().ID().Return(r.ID()).AnyTimes()
 				m.EXPECT().Type().Return(r.Type()).AnyTimes()
 				m.EXPECT().State().Return(&cty.DynamicVal).AnyTimes()
@@ -108,22 +107,20 @@ func TestUpdateResources_UpdateError(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 
-	m := NewMockDestroyableResource(ctrl)
+	m := NewMockUpdatableResource(ctrl)
 
 	m.EXPECT().UpdateState().Return(nil).Times(1)
-	m.EXPECT().Destroy().Return(nil).Times(0)
 	m.EXPECT().ID().Return("id-1234").AnyTimes()
 	m.EXPECT().Type().Return("aws_vpc").AnyTimes()
 	m.EXPECT().State().Return(&cty.DynamicVal).AnyTimes()
 
-	mUpdateError := NewMockDestroyableResource(ctrl)
+	mUpdateError := NewMockUpdatableResource(ctrl)
 
 	mUpdateError.EXPECT().UpdateState().Return(fmt.Errorf("some error")).Times(1)
-	mUpdateError.EXPECT().Destroy().Return(nil).Times(0)
 	mUpdateError.EXPECT().ID().Return("id-3456").AnyTimes()
 	mUpdateError.EXPECT().Type().Return("aws_subnet").AnyTimes()
 
-	actualUpdatedResources := resource.UpdateResources([]resource.DestroyableResource{m, mUpdateError}, 3)
+	actualUpdatedResources := resource.UpdateResources([]resource.UpdatableResource{m, mUpdateError}, 3)
 	require.Len(t, actualUpdatedResources, 1)
 
 	assert.Equal(t, "aws_vpc", actualUpdatedResources[0].Type())
@@ -137,23 +134,21 @@ func TestUpdateResources_StateIsNil(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 
-	m := NewMockDestroyableResource(ctrl)
+	m := NewMockUpdatableResource(ctrl)
 
 	m.EXPECT().UpdateState().Return(nil).Times(1)
-	m.EXPECT().Destroy().Return(nil).Times(0)
 	m.EXPECT().ID().Return("id-1234").AnyTimes()
 	m.EXPECT().Type().Return("aws_vpc").AnyTimes()
 	m.EXPECT().State().Return(&cty.DynamicVal).AnyTimes()
 
-	mNilState := NewMockDestroyableResource(ctrl)
+	mNilState := NewMockUpdatableResource(ctrl)
 
 	mNilState.EXPECT().UpdateState().Return(nil).Times(1)
-	mNilState.EXPECT().Destroy().Return(nil).Times(0)
 	mNilState.EXPECT().ID().Return("id-3456").AnyTimes()
 	mNilState.EXPECT().Type().Return("aws_subnet").AnyTimes()
 	mNilState.EXPECT().State().Return(&cty.NilVal).AnyTimes()
 
-	actualUpdatedResources := resource.UpdateResources([]resource.DestroyableResource{m, mNilState}, 2)
+	actualUpdatedResources := resource.UpdateResources([]resource.UpdatableResource{m, mNilState}, 2)
 	require.Len(t, actualUpdatedResources, 1)
 
 	assert.Equal(t, "aws_vpc", actualUpdatedResources[0].Type())

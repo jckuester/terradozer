@@ -1,8 +1,8 @@
 package main
 
 //nolint:lll
-//go:generate mockgen -source=pkg/provider/provider.go -destination=pkg/state/provider_mock_test.go -package=state_test
-//go:generate mockgen -source=pkg/resource/resource.go -destination=pkg/resource/resource_mock_test.go -package=resource_test
+//go:generate mockgen -source=pkg/resource/update.go -destination=pkg/resource/update_mock_test.go -package=resource_test
+//go:generate mockgen -source=pkg/resource/destroy.go -destination=pkg/resource/destroy_mock_test.go -package=resource_test
 
 import (
 	"flag"
@@ -142,12 +142,23 @@ func mainExitCode() int {
 
 		internal.LogTitle("Starting to delete resources")
 
-		numDeletedResources := resource.DestroyResources(resourcesWithUpdatedState, parallel)
+		numDeletedResources := resource.DestroyResources(
+			convertToDestroyableResources(resourcesWithUpdatedState), parallel)
 
 		internal.LogTitle(fmt.Sprintf("total number of deleted resources: %d", numDeletedResources))
 	}
 
 	return 0
+}
+
+func convertToDestroyableResources(resources []resource.UpdatableResource) []resource.DestroyableResource {
+	var result []resource.DestroyableResource
+
+	for _, r := range resources {
+		result = append(result, r.(resource.DestroyableResource))
+	}
+
+	return result
 }
 
 func printHelp(fs *flag.FlagSet) {

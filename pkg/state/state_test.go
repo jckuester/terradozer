@@ -115,7 +115,7 @@ func TestState_Resources(t *testing.T) {
 	tests := []struct {
 		name              string
 		pathToState       string
-		expectedResources []resource.DestroyableResource
+		expectedResources []resource.UpdatableResource
 		expectedErrMsg    string
 		providers         map[string]*provider.TerraformProvider
 	}{
@@ -129,7 +129,7 @@ func TestState_Resources(t *testing.T) {
 			providers: map[string]*provider.TerraformProvider{
 				"aws": awsProvider,
 			},
-			expectedResources: []resource.DestroyableResource{
+			expectedResources: []resource.UpdatableResource{
 				resource.New("aws_vpc",
 					"vpc-003104c0d87e7a9f4",
 					awsProvider),

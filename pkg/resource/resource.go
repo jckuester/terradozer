@@ -6,15 +6,6 @@ import (
 	"github.com/zclconf/go-cty/cty"
 )
 
-// DestroyableResource implementations can destroy a Terraform resource.
-type DestroyableResource interface {
-	Destroy() error
-	Type() string
-	ID() string
-	State() *cty.Value
-	UpdateState() error
-}
-
 // Resource represents a Terraform resource that can be destroyed.
 type Resource struct {
 	// terraformType is the Terraform type of a resource
