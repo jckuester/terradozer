@@ -16,18 +16,20 @@ type Resource struct {
 	provider *provider.TerraformProvider
 	// internal Terraform state of the resource
 	state *cty.Value
+	attrs map[string]cty.Value
 }
 
 // New creates a destroyable Terraform resource.
 //
-// To destroy a resource, its Terraform Type and ID
-// (which both together uniquely identify a resource), plus a provider that
-// will handle the destroy is needed.
-func New(terraformType, id string, provider *provider.TerraformProvider) *Resource {
+// To destroy a resource, its Terraform Type and ID (which both together uniquely identify a resource),
+// plus a provider that will handle the destroy is needed.
+// For some resources, an additional list of attributes is needed to destroy it.
+func New(terraformType, id string, attrs map[string]cty.Value, provider *provider.TerraformProvider) *Resource {
 	return &Resource{
 		terraformType: terraformType,
 		id:            id,
 		provider:      provider,
+		attrs:         attrs,
 	}
 }
 

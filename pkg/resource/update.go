@@ -146,7 +146,13 @@ func (r Resource) readResource() (cty.Value, error) {
 		return cty.NilVal, err
 	}
 
-	currentResourceState, err := r.provider.ReadResource(r.terraformType, emptyValueWitID(r.id, schema.Block))
+	if r.attrs == nil {
+		r.attrs = map[string]cty.Value{}
+	}
+
+	r.attrs["id"] = cty.StringVal(r.id)
+
+	currentResourceState, err := r.provider.ReadResource(r.terraformType, emptyValueWithAttrs(r.attrs, schema.Block))
 	if err != nil {
 		return cty.NilVal, fmt.Errorf("failed to read current state of resource: %s", err)
 	}
@@ -154,22 +160,25 @@ func (r Resource) readResource() (cty.Value, error) {
 	return currentResourceState, nil
 }
 
-// emptyValueWitID returns a non-null object for the configuration block
-// where all of the attribute values are set to empty values except the ID attribute.
+// emptyValueWithAttrs returns a non-null object for the configuration block
+// where all attribute values are set to empty values except the given ones.
 //
 // see also github.com/hashicorp/terraform/configs/configschema/empty_value.go
-func emptyValueWitID(id string, block *configschema.Block) cty.Value {
+func emptyValueWithAttrs(attrs map[string]cty.Value, block *configschema.Block) cty.Value {
 	vals := make(map[string]cty.Value)
 
 	for name, attrS := range block.Attributes {
-		vals[name] = attrS.EmptyValue()
+		attr, ok := attrs[name]
+		if ok {
+			vals[name] = attr
+		} else {
+			vals[name] = attrS.EmptyValue()
+		}
 	}
 
 	for name, blockS := range block.BlockTypes {
 		vals[name] = blockS.EmptyValue()
 	}
-
-	vals["id"] = cty.StringVal(id)
 
 	return cty.ObjectVal(vals)
 }
