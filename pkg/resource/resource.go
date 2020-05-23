@@ -21,9 +21,11 @@ type Resource struct {
 
 // New creates a destroyable Terraform resource.
 //
-// To destroy a resource, its Terraform Type and ID (which both together uniquely identify a resource),
-// plus a provider that will handle the destroy is needed.
-// For some resources, an additional list of attributes is needed to destroy it.
+// To destroy a resource, its Terraform Type and ID (both together uniquely identify a resource),
+// plus a provider that will handle the destroy is needed. Note: if a resource's internal state
+// representation is known, use NewWithState() instead.
+//
+// For some resources, additionally to the ID a list of attributes needs to be populated to destroy it.
 func New(terraformType, id string, attrs map[string]cty.Value, provider *provider.TerraformProvider) *Resource {
 	return &Resource{
 		terraformType: terraformType,
@@ -33,8 +35,11 @@ func New(terraformType, id string, attrs map[string]cty.Value, provider *provide
 	}
 }
 
-// NewWithState creates a destroyable Terraform resource which
-// contains the internal state representation of the resource.
+// NewWithState creates a destroyable Terraform resource.
+//
+// This constructor is used if a resource's internal state representation is known
+// based on a present Terraform state file. A resource created with this constructor can be destroyed more reliable
+// than with New(), which is used when the state is not known.
 func NewWithState(terraformType, id string, provider *provider.TerraformProvider, state *cty.Value) *Resource {
 	return &Resource{
 		terraformType: terraformType,

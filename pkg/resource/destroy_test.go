@@ -143,7 +143,7 @@ func TestResource_Destroy(t *testing.T) {
 	awsProvider, err := provider.Init("aws", 10*time.Second)
 	require.NoError(t, err)
 
-	r := resource.New("aws_vpc", actualVpcID, awsProvider)
+	r := resource.New("aws_vpc", actualVpcID, nil, awsProvider)
 
 	err = r.UpdateState()
 	require.NoError(t, err)
@@ -181,7 +181,7 @@ func TestResource_Destroy_AwsEcsCluster(t *testing.T) {
 	awsProvider, err := provider.Init("aws", 10*time.Second)
 	require.NoError(t, err)
 
-	r := resource.New("aws_ecs_cluster", actualID, awsProvider)
+	r := resource.New("aws_ecs_cluster", actualID, nil, awsProvider)
 
 	err = r.UpdateState()
 	require.NoError(t, err)
@@ -220,7 +220,7 @@ func TestResource_Destroy_AwsLambdaFunction(t *testing.T) {
 	awsProvider, err := provider.Init("aws", 10*time.Second)
 	require.NoError(t, err)
 
-	r := resource.New("aws_lambda_function", actualID, awsProvider)
+	r := resource.New("aws_lambda_function", actualID, nil, awsProvider)
 
 	err = r.UpdateState()
 	require.NoError(t, err)
@@ -259,7 +259,7 @@ func TestResource_Destroy_Timeout(t *testing.T) {
 	awsProvider, err := provider.Init("aws", 5*time.Second)
 	require.NoError(t, err)
 
-	r := resource.New("aws_vpc", actualVpcID, awsProvider)
+	r := resource.New("aws_vpc", actualVpcID, nil, awsProvider)
 
 	err = r.UpdateState()
 	require.NoError(t, err)
@@ -269,7 +269,7 @@ func TestResource_Destroy_Timeout(t *testing.T) {
 }
 
 func TestResource_Destroy_NilState(t *testing.T) {
-	r := resource.New("aws_foo", "id-1234", nil)
+	r := resource.New("aws_foo", "id-1234", nil, nil)
 
 	err := r.Destroy()
 	assert.EqualError(t, err, "resource state is nil; need to call update first")

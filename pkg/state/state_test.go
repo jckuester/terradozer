@@ -130,9 +130,9 @@ func TestState_Resources(t *testing.T) {
 				"aws": awsProvider,
 			},
 			expectedResources: []resource.UpdatableResource{
-				resource.New("aws_vpc",
+				resource.NewWithState("aws_vpc",
 					"vpc-003104c0d87e7a9f4",
-					awsProvider),
+					awsProvider, nil),
 			},
 		},
 		{
