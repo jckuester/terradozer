@@ -46,7 +46,7 @@ func TestInstall(t *testing.T) {
 			err := os.RemoveAll(".terradozer")
 			require.NoError(t, err)
 
-			p, err := provider.Install(tc.providerName, tc.constraint, true)
+			p, err := provider.Install(tc.providerName, tc.constraint, ".terradozer", true)
 			require.NoError(t, err)
 
 			if tc.expectedFile != "" {
@@ -100,7 +100,7 @@ func TestInstall_Cache(t *testing.T) {
 			err := os.RemoveAll(".terradozer")
 			require.NoError(t, err)
 
-			p, err := provider.Install(tc.providerName, tc.constraint, tc.useCache)
+			p, err := provider.Install(tc.providerName, tc.constraint, ".terradozer", tc.useCache)
 			require.NoError(t, err)
 			assert.Equal(t, tc.providerName, p.Name)
 			assert.Equal(t, tc.constraint, p.Version.MustParse().String())
@@ -119,7 +119,7 @@ func TestInstall_Cache(t *testing.T) {
 				}
 			}
 
-			p2, err := provider.Install(tc.providerName, tc.constraint, tc.useCache)
+			p2, err := provider.Install(tc.providerName, tc.constraint, ".terradozer", tc.useCache)
 			require.NoError(t, err)
 			assert.Equal(t, tc.providerName, p2.Name)
 			assert.Equal(t, tc.constraint, p2.Version.MustParse().String())
@@ -153,7 +153,7 @@ func TestTerraformProvider_ImportResource(t *testing.T) {
 	actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
 	aws.GetVpcById(t, actualVpcID, env.AWSRegion)
 
-	provider, err := provider.Init("aws", 15)
+	provider, err := provider.Init("aws", ".terradozer", 15)
 	require.NoError(t, err)
 
 	importedResources, err := provider.ImportResource("aws_vpc", actualVpcID)
@@ -201,7 +201,7 @@ func TestTerraformProvider_ReadResource(t *testing.T) {
 	actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
 	aws.GetVpcById(t, actualVpcID, env.AWSRegion)
 
-	p, err := provider.Init("aws", 15)
+	p, err := provider.Init("aws", ".terradozer", 15)
 	require.NoError(t, err)
 
 	currentResourceState, err := p.ReadResource("aws_vpc",
@@ -261,7 +261,7 @@ func TestInitProviders(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			actualProviders, err := provider.InitProviders(tc.providerNames, 15)
+			actualProviders, err := provider.InitProviders(tc.providerNames, ".terradozer", 15)
 
 			if tc.expectedErrMsg != "" {
 				assert.EqualError(t, err, tc.expectedErrMsg)

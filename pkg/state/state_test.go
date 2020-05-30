@@ -109,7 +109,7 @@ func TestState_Resources(t *testing.T) {
 
 	test.InitEnv(t)
 
-	awsProvider, err := provider.Init("aws", 10*time.Second)
+	awsProvider, err := provider.Init("aws", ".terradozer", 10*time.Second)
 	require.NoError(t, err)
 
 	tests := []struct {

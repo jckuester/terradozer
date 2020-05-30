@@ -20,15 +20,15 @@ import (
 const (
 	packagePath  = "github.com/jckuester/terradozer"
 	usageMessage = `
-Terraform destroy using only the state file.
+Terraform destroy using only the state - no *.tf files needed.
 
 USAGE:
-  $ terradozer [flags] [path/to/terraform.tfstate]
+  $ terradozer [flags] <path/to/terraform.tfstate>
 
 FLAGS:
   -debug
     	Enable debug logging
-  -dry
+  -dry-run
     	Show what would be destroyed
   -force
     	Destroy without asking for confirmation
@@ -224,7 +224,7 @@ func TestAcc_DryRun(t *testing.T) {
 	}{
 		{
 			name: "with dry-run flag",
-			flag: "-dry",
+			flag: "-dry-run",
 			expectedLogs: []string{
 				"SHOWING RESOURCES THAT WOULD BE DELETED (DRY RUN)",
 				"TOTAL NUMBER OF RESOURCES THAT WOULD BE DELETED: 1",
@@ -332,9 +332,9 @@ func TestAcc_Force(t *testing.T) {
 		},
 		{
 			name:  "with force and dry-run flag",
-			flags: []string{"-force", "-dry"},
+			flags: []string{"-force", "-dry-run"},
 			expectedLogs: []string{
-				"-force and -dry flag cannot be used together",
+				"-force and -dry-run flag cannot be used together",
 			},
 			unexpectedLogs: []string{
 				"STARTING TO DELETE RESOURCES",

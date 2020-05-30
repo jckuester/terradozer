@@ -29,8 +29,8 @@ func DestroyResources(resources []DestroyableResource, parallel int) int {
 
 	workerResults := make(chan workerResult, numOfResourcesToDelete)
 
-	for workerID := 1; workerID <= parallel; workerID++ {
-		go workerDestroy(workerID, jobQueue, workerResults)
+	for i := 1; i <= parallel; i++ {
+		go workerDestroy(jobQueue, workerResults)
 	}
 
 	log.Debug("start distributing resources to workers for this run")
@@ -83,14 +83,13 @@ type workerResult struct {
 }
 
 // workerDestroy is a worker that destroys a resource.
-func workerDestroy(id int, resources <-chan DestroyableResource, result chan<- workerResult) {
+func workerDestroy(resources <-chan DestroyableResource, result chan<- workerResult) {
 	for r := range resources {
 		err := r.Destroy()
 		if err != nil {
 			switch err := err.(type) {
 			case *RetryDestroyError:
 				log.WithFields(log.Fields{
-					"worker_id":   id,
 					"type":        r.Type(),
 					"resource_id": r.ID(),
 				}).Info(internal.Pad("will retry to delete resource"))
@@ -101,7 +100,6 @@ func workerDestroy(id int, resources <-chan DestroyableResource, result chan<- w
 
 			default:
 				log.WithError(err).WithFields(log.Fields{
-					"worker_id":   id,
 					"type":        r.Type(),
 					"resource_id": r.ID(),
 				}).Debug(internal.Pad("unable to delete resource"))

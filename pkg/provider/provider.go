@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mitchellh/cli"
+
 	"github.com/hashicorp/terraform/helper/resource"
 
 	"github.com/jckuester/terradozer/internal"
@@ -22,7 +24,7 @@ import (
 	"github.com/hashicorp/terraform/plugin"
 	"github.com/hashicorp/terraform/plugin/discovery"
 	"github.com/hashicorp/terraform/providers"
-	"github.com/mitchellh/cli"
+	goHomeDir "github.com/mitchellh/go-homedir"
 	"github.com/zclconf/go-cty/cty"
 )
 
@@ -250,15 +252,18 @@ func enableForceDestroyAttributes(state cty.Value) cty.Value {
 
 // Install installs a Terraform Provider Plugin binary with a given version.
 // For example, call:
-//   Install("aws", "2.43.0", true)
-func Install(providerName, versionConstraint string, cacheBinary bool) (discovery.PluginMeta, error) {
-	installDir := ".terradozer"
+//   Install("aws", "2.43.0", "~/.terradozer", true)
+func Install(providerName, versionConstraint, installDir string, cacheBinary bool) (discovery.PluginMeta, error) {
+	expandedInstallDir, err := goHomeDir.Expand(installDir)
+	if err != nil {
+		return discovery.PluginMeta{}, err
+	}
 
 	providerInstaller := &discovery.ProviderInstaller{
-		Dir: installDir,
+		Dir: filepath.FromSlash(expandedInstallDir),
 		Cache: func() discovery.PluginCache {
 			if cacheBinary {
-				return discovery.NewLocalPluginCache(filepath.FromSlash(installDir + "/cache"))
+				return discovery.NewLocalPluginCache(filepath.FromSlash(expandedInstallDir + "/cache"))
 			}
 			return nil
 		}(),
@@ -298,14 +303,14 @@ func Install(providerName, versionConstraint string, cacheBinary bool) (discover
 //
 // Note: Init() combines calls to the functions Install(), Launch(), and Configure().
 // Timeout is the amount of time to wait for a destroy operation of the provider to finish.
-func Init(providerName string, timeout time.Duration) (*TerraformProvider, error) {
+func Init(providerName string, installDir string, timeout time.Duration) (*TerraformProvider, error) {
 	pConfig, pVersion, err := config(providerName)
 	if err != nil {
 		log.WithField("name", providerName).Info(internal.Pad("ignoring resources of (yet) unsupported provider"))
 		return nil, nil
 	}
 
-	metaPlugin, err := Install(providerName, pVersion, true)
+	metaPlugin, err := Install(providerName, pVersion, installDir, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to install provider (%s): %s", providerName, err)
 	}
@@ -336,11 +341,12 @@ func Init(providerName string, timeout time.Duration) (*TerraformProvider, error
 
 // InitProviders installs, launches (i.e., starts the plugin binary process), and configures
 // a given list of Terraform Providers by name with a default configuration.
-func InitProviders(providerNames []string, timeout time.Duration) (map[string]*TerraformProvider, error) {
+func InitProviders(providerNames []string, installDir string,
+	timeout time.Duration) (map[string]*TerraformProvider, error) {
 	providers := map[string]*TerraformProvider{}
 
 	for _, pName := range providerNames {
-		p, err := Init(pName, timeout)
+		p, err := Init(pName, installDir, timeout)
 		if err != nil {
 			return nil, err
 		}

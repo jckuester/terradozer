@@ -140,7 +140,7 @@ func TestResource_Destroy(t *testing.T) {
 	actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
 	aws.GetVpcById(t, actualVpcID, env.AWSRegion)
 
-	awsProvider, err := provider.Init("aws", 10*time.Second)
+	awsProvider, err := provider.Init("aws", ".terradozer", 10*time.Second)
 	require.NoError(t, err)
 
 	r := resource.New("aws_vpc", actualVpcID, nil, awsProvider)
@@ -178,7 +178,7 @@ func TestResource_Destroy_AwsEcsCluster(t *testing.T) {
 
 	test.AssertEcsClusterExists(t, env, actualID)
 
-	awsProvider, err := provider.Init("aws", 10*time.Second)
+	awsProvider, err := provider.Init("aws", ".terradozer", 10*time.Second)
 	require.NoError(t, err)
 
 	r := resource.New("aws_ecs_cluster", actualID, nil, awsProvider)
@@ -217,7 +217,7 @@ func TestResource_Destroy_AwsLambdaFunction(t *testing.T) {
 	actualID := terraform.Output(t, terraformOptions, "id")
 	test.AssertLambdaFunctionExists(t, env, actualID)
 
-	awsProvider, err := provider.Init("aws", 10*time.Second)
+	awsProvider, err := provider.Init("aws", ".terradozer", 10*time.Second)
 	require.NoError(t, err)
 
 	r := resource.New("aws_lambda_function", actualID, nil, awsProvider)
@@ -256,7 +256,7 @@ func TestResource_Destroy_Timeout(t *testing.T) {
 
 	terraform.InitAndApply(t, terraformOptionsDependency)
 
-	awsProvider, err := provider.Init("aws", 5*time.Second)
+	awsProvider, err := provider.Init("aws", ".terradozer", 5*time.Second)
 	require.NoError(t, err)
 
 	r := resource.New("aws_vpc", actualVpcID, nil, awsProvider)

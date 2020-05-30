@@ -42,7 +42,7 @@ func mainExitCode() int {
 	}
 
 	flags.StringVar(&timeout, "timeout", "30s", "Amount of time to wait for a destroy of a resource to finish")
-	flags.BoolVar(&dryRun, "dry", false, "Show what would be destroyed")
+	flags.BoolVar(&dryRun, "dry-run", false, "Show what would be destroyed")
 	flags.BoolVar(&force, "force", false, "Destroy without asking for confirmation")
 	flags.BoolVar(&logDebug, "debug", false, "Enable debug logging")
 	flags.IntVar(&parallel, "parallel", 10, "Limit the number of concurrent destroy operations")
@@ -69,7 +69,7 @@ func mainExitCode() int {
 	}
 
 	if force && dryRun {
-		fmt.Fprint(os.Stderr, color.RedString("Error:️ -force and -dry flag cannot be used together\n"))
+		fmt.Fprint(os.Stderr, color.RedString("Error:️ -force and -dry-run flag cannot be used together\n"))
 		printHelp(flags)
 
 		return 1
@@ -102,7 +102,7 @@ func mainExitCode() int {
 	internal.LogTitle("reading state")
 	log.WithField("file", pathToState).Info(internal.Pad("using state"))
 
-	providers, err := provider.InitProviders(tfstate.ProviderNames(), timeoutDuration)
+	providers, err := provider.InitProviders(tfstate.ProviderNames(), "~/.terradozer", timeoutDuration)
 	if err != nil {
 		fmt.Fprint(os.Stderr, color.RedString("\nError:️ failed to initialize Terraform providers: %s\n", err))
 
@@ -168,10 +168,10 @@ func printHelp(fs *flag.FlagSet) {
 }
 
 const help = `
-Terraform destroy using only the state file.
+Terraform destroy using only the state - no *.tf files needed.
 
 USAGE:
-  $ terradozer [flags] [path/to/terraform.tfstate]
+  $ terradozer [flags] <path/to/terraform.tfstate>
 
 FLAGS:
 `

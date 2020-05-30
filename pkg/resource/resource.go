@@ -1,4 +1,4 @@
-// Package resource manages the deletion of Terraform resources.
+// Package resource manages the state update and deletion of Terraform resources.
 package resource
 
 import (
