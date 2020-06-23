@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/mitchellh/cli"
@@ -27,8 +26,6 @@ import (
 	goHomeDir "github.com/mitchellh/go-homedir"
 	"github.com/zclconf/go-cty/cty"
 )
-
-const requestError = "RequestError"
 
 // provider is the interface that every Terraform Provider Plugin implements.
 type provider interface {
@@ -138,7 +135,7 @@ func (p TerraformProvider) ImportResource(terraformType string, id string) ([]pr
 		})
 
 		if response.Diagnostics.HasErrors() {
-			if strings.Contains(response.Diagnostics.Err().Error(), requestError) {
+			if shouldRetry(response.Diagnostics.Err()) {
 				log.WithError(response.Diagnostics.Err()).Debug("retrying to import resource")
 
 				return resource.RetryableError(response.Diagnostics.Err())
@@ -171,7 +168,7 @@ func (p TerraformProvider) ReadResource(terraformType string, state cty.Value) (
 		})
 
 		if response.Diagnostics.HasErrors() {
-			if strings.Contains(response.Diagnostics.Err().Error(), requestError) {
+			if shouldRetry(response.Diagnostics.Err()) {
 				log.WithError(response.Diagnostics.Err()).Debug("retrying to read current state of resource")
 
 				return resource.RetryableError(response.Diagnostics.Err())
@@ -206,7 +203,7 @@ func (p TerraformProvider) DestroyResource(terraformType string, currentState ct
 		})
 
 		if response.Diagnostics.HasErrors() {
-			if strings.Contains(response.Diagnostics.Err().Error(), requestError) {
+			if shouldRetry(response.Diagnostics.Err()) {
 				log.WithError(response.Diagnostics.Err()).Debug("retrying to destroy resource")
 
 				return resource.RetryableError(response.Diagnostics.Err())
