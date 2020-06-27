@@ -41,11 +41,11 @@ Happy (terra)dozing!
 It's recommended to install a specific version of terradozer available on the
 [releases page](https://github.com/jckuester/terradozer/releases).
 
-Here is the recommended way to install terradozer v0.1.1:
+Here is the recommended way to install terradozer v0.1.2:
 
 ```bash
 # install it into ./bin/
-curl -sSfL https://raw.githubusercontent.com/jckuester/terradozer/master/install.sh | sh -s v0.1.1
+curl -sSfL https://raw.githubusercontent.com/jckuester/terradozer/master/install.sh | sh -s v0.1.2
 ```
 
 ## Usage

@@ -15,7 +15,8 @@ resource "aws_s3_bucket" "test" {
   bucket = var.name
 
   tags = {
-    Name = var.name
+    Name       = var.name
+    terradozer = "test-acc"
   }
 }
 
