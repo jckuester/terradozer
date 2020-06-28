@@ -14,6 +14,6 @@ terraform {
 resource "aws_ecs_cluster" "test" {
   name = var.name
   tags = {
-    awsweeper = "test-acc"
+    terradozer = "test-acc"
   }
 }

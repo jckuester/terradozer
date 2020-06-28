@@ -12,15 +12,16 @@ terraform {
 }
 
 resource "aws_vpc" "test" {
-  cidr_block       = "10.0.0.0/16"
+  cidr_block = "10.0.0.0/16"
 
   tags = {
-    Name = var.name
+    Name       = var.name
+    terradozer = "test-acc"
   }
 }
 
 resource "aws_iam_role" "test" {
-  name = "test_role"
+  name = var.name
 
   assume_role_policy = <<EOF
 {
@@ -39,14 +40,14 @@ resource "aws_iam_role" "test" {
 EOF
 
   tags = {
-    tag-key = "tag-value"
+    terradozer = "test-acc"
   }
 }
 
 resource "aws_iam_policy" "test" {
-  name        = "test_policy"
+  name        = var.name
   path        = "/"
-  description = "My test policy"
+  description = "A test policy"
 
   policy = <<EOF
 {

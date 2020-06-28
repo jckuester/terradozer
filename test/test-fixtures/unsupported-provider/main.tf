@@ -12,14 +12,15 @@ terraform {
 }
 
 resource "aws_vpc" "test" {
-  cidr_block       = "10.0.0.0/16"
+  cidr_block = "10.0.0.0/16"
 
   tags = {
-    Name = var.name
+    Name       = var.name
+    terradozer = "test-acc"
   }
 }
 
 resource "random_integer" "test" {
-  min     = 1
-  max     = 50000
+  min = 1
+  max = 50000
 }

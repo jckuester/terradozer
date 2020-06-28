@@ -229,7 +229,10 @@ func TestTerraformProvider_ReadResource(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, currentResourceState.GetAttr("tags"),
-		cty.MapVal(map[string]cty.Value{"Name": cty.StringVal(terraformOptions.Vars["name"].(string))}))
+		cty.MapVal(map[string]cty.Value{
+			"Name":       cty.StringVal(terraformOptions.Vars["name"].(string)),
+			"terradozer": cty.StringVal("test-acc"),
+		}))
 
 	assert.Equal(t, currentResourceState.GetAttr("cidr_block"),
 		cty.StringVal("10.0.0.0/16"))

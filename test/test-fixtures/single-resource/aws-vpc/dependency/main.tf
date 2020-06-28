@@ -18,6 +18,7 @@ resource "aws_subnet" "test" {
   cidr_block = "10.0.1.0/24"
 
   tags = {
-    Name = var.name
+    Name       = var.name
+    terradozer = "test-acc"
   }
 }

@@ -12,10 +12,11 @@ terraform {
 }
 
 resource "aws_vpc" "test" {
-  cidr_block       = "10.0.0.0/16"
+  cidr_block = "10.0.0.0/16"
 
   tags = {
-    Name = var.name
+    Name       = var.name
+    terradozer = "test-acc"
   }
 }
 
@@ -25,7 +26,7 @@ resource "aws_iam_role" "test" {
   assume_role_policy = data.aws_iam_policy_document.role.json
 
   tags = {
-    tag-key = var.name
+    terradozer = "test-acc"
   }
 }
 
@@ -41,8 +42,8 @@ data "aws_iam_policy_document" "role" {
 }
 
 resource "aws_iam_policy" "test" {
-  name        = var.name
-  path        = "/"
+  name = var.name
+  path = "/"
 
   policy = data.aws_iam_policy_document.policy.json
 }

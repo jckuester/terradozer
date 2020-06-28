@@ -29,6 +29,10 @@ resource "aws_iam_role" "test" {
   ]
 }
 EOF
+
+  tags = {
+    terradozer = "test-acc"
+  }
 }
 
 resource "aws_lambda_function" "test" {
@@ -43,7 +47,7 @@ resource "aws_lambda_function" "test" {
 
   environment {
     variables = {
-      awsweeper = "test-acc"
+      terradozer = "test-acc"
     }
   }
 }
