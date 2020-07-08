@@ -300,8 +300,9 @@ func Install(providerName, versionConstraint, installDir string, cacheBinary boo
 //
 // Note: Init() combines calls to the functions Install(), Launch(), and Configure().
 // Timeout is the amount of time to wait for a destroy operation of the provider to finish.
-func Init(providerName string, installDir string, timeout time.Duration) (*TerraformProvider, error) {
-	pConfig, pVersion, err := config(providerName)
+func Init(providerName string, installDir string, configAttrs map[string]cty.Value,
+	timeout time.Duration) (*TerraformProvider, error) {
+	pConfig, pVersion, err := config(providerName, configAttrs)
 	if err != nil {
 		log.WithField("name", providerName).Info(internal.Pad("ignoring resources of (yet) unsupported provider"))
 		return nil, nil
@@ -336,20 +337,26 @@ func Init(providerName string, installDir string, timeout time.Duration) (*Terra
 	return p, nil
 }
 
+type Cfg struct {
+	Name   string
+	Config map[string]cty.Value
+}
+
 // InitProviders installs, launches (i.e., starts the plugin binary process), and configures
 // a given list of Terraform Providers by name with a default configuration.
-func InitProviders(providerNames []string, installDir string,
+func InitProviders(providerConfigs []Cfg, installDir string,
 	timeout time.Duration) (map[string]*TerraformProvider, error) {
 	providers := map[string]*TerraformProvider{}
 
-	for _, pName := range providerNames {
-		p, err := Init(pName, installDir, timeout)
+	for _, pCfg := range providerConfigs {
+		log.Debugf("init: %s", pCfg.Name)
+		p, err := Init(pCfg.Name, installDir, pCfg.Config, timeout)
 		if err != nil {
 			return nil, err
 		}
 
 		if p != nil {
-			providers[pName] = p
+			providers[pCfg.Name] = p
 		}
 	}
 

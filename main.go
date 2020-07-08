@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/zclconf/go-cty/cty"
+
 	"github.com/apex/log"
 	"github.com/apex/log/handlers/cli"
 	"github.com/fatih/color"
@@ -102,7 +104,29 @@ func mainExitCode() int {
 	internal.LogTitle("reading state")
 	log.WithField("file", pathToState).Info(internal.Pad("using state"))
 
-	providers, err := provider.InitProviders(tfstate.ProviderNames(), "~/.terradozer", timeoutDuration)
+	var providerConfigs []provider.Cfg
+
+	for _, pName := range tfstate.ProviderNames() {
+		if pName == "aws" {
+			providerConfigs = append(providerConfigs, provider.Cfg{
+				Name: pName,
+				Config: map[string]cty.Value{
+					"profile":                 cty.StringVal(os.Getenv("AWS_PROFILE")),
+					"region":                  cty.StringVal(os.Getenv("AWS_DEFAULT_REGION")),
+					"access_key":              cty.StringVal(os.Getenv("AWS_ACCESS_KEY_ID")),
+					"secret_key":              cty.StringVal(os.Getenv("AWS_SECRET_ACCESS_KEY")),
+					"shared_credentials_file": cty.StringVal(os.Getenv("AWS_SHARED_CREDENTIALS_FILE")),
+					"token":                   cty.StringVal(os.Getenv("AWS_SESSION_TOKEN")),
+				},
+			})
+		} else {
+			providerConfigs = append(providerConfigs, provider.Cfg{
+				Name: pName,
+			})
+		}
+	}
+
+	providers, err := provider.InitProviders(providerConfigs, "~/.terradozer", timeoutDuration)
 	if err != nil {
 		fmt.Fprint(os.Stderr, color.RedString("\nError:️ failed to initialize Terraform providers: %s\n", err))
 
