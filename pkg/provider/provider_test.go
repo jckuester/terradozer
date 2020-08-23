@@ -19,7 +19,7 @@ import (
 	"github.com/zclconf/go-cty/cty"
 )
 
-func TestInstall(t *testing.T) {
+func TestInstall_Cache(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test.")
 	}
@@ -34,7 +34,7 @@ func TestInstall(t *testing.T) {
 		expectedChecksum string
 	}{
 		{
-			name:             "install Terraform AWS Provider",
+			name:             "cache Terraform AWS Provider",
 			providerName:     "aws",
 			constraint:       "2.43.0",
 			expectedFile:     ".terradozer/terraform-provider-aws_v2.43.0_x4",
@@ -46,25 +46,34 @@ func TestInstall(t *testing.T) {
 			err := os.RemoveAll(".terradozer")
 			require.NoError(t, err)
 
-			p, err := provider.Install(tc.providerName, tc.constraint, ".terradozer", true)
+			p, err := provider.Install(tc.providerName, tc.constraint, ".terradozer")
 			require.NoError(t, err)
 
-			if tc.expectedFile != "" {
-				f, err := os.Open(tc.expectedFile)
-				if err != nil {
-					t.Fatal(err)
-				}
-				defer f.Close()
-
-				assert.Equal(t, tc.providerName, p.Name)
-				assert.Equal(t, tc.constraint, p.Version.MustParse().String())
-				assert.Equal(t, tc.expectedChecksum, checksum(t, f))
+			f, err := os.Open(tc.expectedFile)
+			if err != nil {
+				t.Fatal(err)
 			}
+			defer f.Close()
+
+			assert.Equal(t, tc.providerName, p.Name)
+			assert.Equal(t, tc.constraint, p.Version.MustParse().String())
+			assert.Equal(t, tc.expectedChecksum, checksum(t, f))
+
+			modTime := modifiedTime(t, tc.expectedFile)
+
+			p2, err := provider.Install(tc.providerName, tc.constraint, ".terradozer")
+			require.NoError(t, err)
+			assert.Equal(t, tc.providerName, p2.Name)
+			assert.Equal(t, tc.constraint, p2.Version.MustParse().String())
+
+			modTimeAfterSecondInstall := modifiedTime(t, tc.expectedFile)
+
+			assert.True(t, modTime.Equal(modTimeAfterSecondInstall))
 		})
 	}
 }
 
-func TestInstall_Cache(t *testing.T) {
+func TestInstall_PurgeOldVersions(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test.")
 	}
@@ -72,27 +81,20 @@ func TestInstall_Cache(t *testing.T) {
 	defer os.RemoveAll(".terradozer")
 
 	tests := []struct {
-		name          string
-		providerName  string
-		constraint    string
-		expectedFile  string
-		expectedCache string
-		useCache      bool
+		name            string
+		providerName    string
+		constraintOld   string
+		constraint      string
+		expectedFileOld string
+		expectedFile    string
 	}{
 		{
-			name:          "cache Terraform AWS Provider",
-			providerName:  "aws",
-			constraint:    "2.43.0",
-			expectedFile:  ".terradozer/terraform-provider-aws_v2.43.0_x4",
-			expectedCache: ".terradozer/cache/terraform-provider-aws_v2.43.0_x4",
-			useCache:      true,
-		},
-		{
-			name:         "don't cache Terraform AWS Provider",
-			providerName: "aws",
-			constraint:   "2.43.0",
-			expectedFile: ".terradozer/terraform-provider-aws_v2.43.0_x4",
-			useCache:     false,
+			name:            "purge old Terraform AWS Provider binaries",
+			providerName:    "aws",
+			constraintOld:   "2.43.0",
+			constraint:      "2.68.0",
+			expectedFileOld: ".terradozer/terraform-provider-aws_v2.43.0_x4",
+			expectedFile:    ".terradozer/terraform-provider-aws_v2.68.0_x4",
 		},
 	}
 	for _, tc := range tests {
@@ -100,39 +102,35 @@ func TestInstall_Cache(t *testing.T) {
 			err := os.RemoveAll(".terradozer")
 			require.NoError(t, err)
 
-			p, err := provider.Install(tc.providerName, tc.constraint, ".terradozer", tc.useCache)
+			p, err := provider.Install(tc.providerName, tc.constraintOld, ".terradozer")
 			require.NoError(t, err)
+
+			assertFileExists(t, tc.expectedFileOld)
+
 			assert.Equal(t, tc.providerName, p.Name)
-			assert.Equal(t, tc.constraint, p.Version.MustParse().String())
+			assert.Equal(t, tc.constraintOld, p.Version.MustParse().String())
 
-			_, err = ioutil.ReadFile(tc.expectedFile)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			modTime := modifiedTime(t, tc.expectedFile)
-
-			if tc.expectedCache != "" {
-				_, err = ioutil.ReadFile(tc.expectedCache)
-				if err != nil {
-					t.Fatal(err)
-				}
-			}
-
-			p2, err := provider.Install(tc.providerName, tc.constraint, ".terradozer", tc.useCache)
+			p2, err := provider.Install(tc.providerName, tc.constraint, ".terradozer")
 			require.NoError(t, err)
 			assert.Equal(t, tc.providerName, p2.Name)
 			assert.Equal(t, tc.constraint, p2.Version.MustParse().String())
 
-			modTimeAfterSecondInstall := modifiedTime(t, tc.expectedFile)
-
-			if tc.useCache {
-				assert.True(t, modTime.Equal(modTimeAfterSecondInstall))
-			} else {
-				assert.True(t, modTime.Before(modTimeAfterSecondInstall))
-			}
+			assertFileExists(t, tc.expectedFile)
+			assertFileDeleted(t, tc.expectedFileOld)
 		})
 	}
+}
+
+func assertFileExists(t *testing.T, fileName string) {
+	_, err := ioutil.ReadFile(fileName)
+	assert.NoError(t, err, "file is expected to exist: %s", fileName)
+
+}
+
+func assertFileDeleted(t *testing.T, fileName string) {
+	_, err := ioutil.ReadFile(fileName)
+	assert.Error(t, err, "file is expected to be deleted: %s", fileName)
+
 }
 
 func TestTerraformProvider_ImportResource(t *testing.T) {

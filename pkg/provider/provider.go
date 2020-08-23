@@ -9,20 +9,17 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/mitchellh/cli"
-
-	"github.com/hashicorp/terraform/helper/resource"
-
-	"github.com/jckuester/terradozer/internal"
-
 	"github.com/apex/log"
 	"github.com/hashicorp/go-hclog"
 	goPlugin "github.com/hashicorp/go-plugin"
 	"github.com/hashicorp/go-version"
 	"github.com/hashicorp/terraform/addrs"
+	"github.com/hashicorp/terraform/helper/resource"
 	"github.com/hashicorp/terraform/plugin"
 	"github.com/hashicorp/terraform/plugin/discovery"
 	"github.com/hashicorp/terraform/providers"
+	"github.com/jckuester/terradozer/internal"
+	"github.com/mitchellh/cli"
 	goHomeDir "github.com/mitchellh/go-homedir"
 	"github.com/zclconf/go-cty/cty"
 )
@@ -253,21 +250,24 @@ func enableForceDestroyAttributes(state cty.Value) cty.Value {
 
 // Install installs a Terraform Provider Plugin binary with a given version.
 // For example, call:
-//   Install("aws", "2.43.0", "~/.terradozer", true)
-func Install(providerName, versionConstraint, installDir string, cacheBinary bool) (discovery.PluginMeta, error) {
+//   Install("aws", "2.43.0", "~/.terradozer")
+func Install(providerName, versionConstraint, installDir string) (discovery.PluginMeta, error) {
 	expandedInstallDir, err := goHomeDir.Expand(installDir)
 	if err != nil {
 		return discovery.PluginMeta{}, err
 	}
 
+	// if path to provider binary already exists, return the path to executable instead of reinstalling it
+	plugins := discovery.FindPlugins("provider", []string{installDir})
+
+	for p := range plugins {
+		if p.Name == providerName && p.Version == discovery.VersionStr(versionConstraint) {
+			return p, nil
+		}
+	}
+
 	providerInstaller := &discovery.ProviderInstaller{
-		Dir: filepath.FromSlash(expandedInstallDir),
-		Cache: func() discovery.PluginCache {
-			if cacheBinary {
-				return discovery.NewLocalPluginCache(filepath.FromSlash(expandedInstallDir + "/cache"))
-			}
-			return nil
-		}(),
+		Dir:                   filepath.FromSlash(expandedInstallDir),
 		PluginProtocolVersion: discovery.PluginInstallProtocolVersion,
 		SkipVerify:            false,
 		Ui: &cli.BasicUi{
@@ -296,6 +296,14 @@ func Install(providerName, versionConstraint, installDir string, cacheBinary boo
 		return discovery.PluginMeta{}, tfDiagnostics.Err()
 	}
 
+	// clean up old, unused versions of provider plugins
+	_, err = providerInstaller.PurgeUnused(map[string]discovery.PluginMeta{
+		providerName: meta,
+	})
+	if err != nil {
+		return discovery.PluginMeta{}, err
+	}
+
 	return meta, nil
 }
 
@@ -311,7 +319,7 @@ func Init(providerName string, installDir string, timeout time.Duration) (*Terra
 		return nil, nil
 	}
 
-	metaPlugin, err := Install(providerName, pVersion, installDir, true)
+	metaPlugin, err := Install(providerName, pVersion, installDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to install provider (%s): %s", providerName, err)
 	}
