@@ -232,6 +232,10 @@ func (p TerraformProvider) DestroyResource(terraformType string, currentState ct
 func enableForceDestroyAttributes(state cty.Value) cty.Value {
 	stateWithDestroyAttrs := map[string]cty.Value{}
 
+	if state.IsNull() {
+		return state
+	}
+
 	if state.CanIterateElements() {
 		for k, v := range state.AsValueMap() {
 			if k == "force_detach_policies" || k == "force_destroy" {

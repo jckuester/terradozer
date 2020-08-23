@@ -84,7 +84,7 @@ func updateWorker(resources <-chan UpdatableResource, result chan<- updateWorker
 }
 
 // UpdateState updates the state of the resource (i.e., refreshes all its attributes).
-// If the resource is already gone, the updated state will be nil.
+// If the resource is already gone, the updated state will be nil (more precisely, of type cty.NilVal).
 func (r *Resource) UpdateState() error {
 	if r.state != nil {
 		// if the resource stores already a state representation, refresh that state
