@@ -109,6 +109,12 @@ func mainExitCode() int {
 		return 1
 	}
 
+	defer func() {
+		for _, p := range providers {
+			_ = p.Close()
+		}
+	}()
+
 	resources, err := tfstate.Resources(providers)
 	if err != nil {
 		fmt.Fprint(os.Stderr, color.RedString("\nError:️ failed to get resources from Terraform state: %s\n", err))

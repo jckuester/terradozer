@@ -31,6 +31,7 @@ type provider interface {
 	ReadResource(providers.ReadResourceRequest) providers.ReadResourceResponse
 	ApplyResourceChange(providers.ApplyResourceChangeRequest) providers.ApplyResourceChangeResponse
 	ImportResourceState(providers.ImportResourceStateRequest) providers.ImportResourceStateResponse
+	Close() error
 }
 
 type TerraformProvider struct {
@@ -219,6 +220,11 @@ func (p TerraformProvider) DestroyResource(terraformType string, currentState ct
 	}
 
 	return nil
+}
+
+// Close shuts down the plugin process if applicable.
+func (p TerraformProvider) Close() error {
+	return p.provider.Close()
 }
 
 // enableForceDestroyAttributes sets force destroy attributes of a resource to true

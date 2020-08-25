@@ -50,9 +50,8 @@ func TestInstall_Cache(t *testing.T) {
 			require.NoError(t, err)
 
 			f, err := os.Open(tc.expectedFile)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
+
 			defer f.Close()
 
 			assert.Equal(t, tc.providerName, p.Name)
@@ -61,8 +60,11 @@ func TestInstall_Cache(t *testing.T) {
 
 			modTime := modifiedTime(t, tc.expectedFile)
 
+			time.Sleep(2 * time.Second)
+
 			p2, err := provider.Install(tc.providerName, tc.constraint, ".terradozer")
 			require.NoError(t, err)
+
 			assert.Equal(t, tc.providerName, p2.Name)
 			assert.Equal(t, tc.constraint, p2.Version.MustParse().String())
 
