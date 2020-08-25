@@ -264,7 +264,7 @@ func Install(providerName, versionConstraint, installDir string) (discovery.Plug
 	}
 
 	// if path to provider binary already exists, return the path to executable instead of reinstalling it
-	plugins := discovery.FindPlugins("provider", []string{installDir})
+	plugins := discovery.FindPlugins("provider", []string{expandedInstallDir})
 
 	for p := range plugins {
 		if p.Name == providerName && p.Version == discovery.VersionStr(versionConstraint) {
