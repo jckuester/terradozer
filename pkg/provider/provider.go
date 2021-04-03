@@ -12,7 +12,6 @@ import (
 	"github.com/apex/log"
 	"github.com/hashicorp/go-hclog"
 	goPlugin "github.com/hashicorp/go-plugin"
-	"github.com/hashicorp/go-version"
 	"github.com/hashicorp/terraform/addrs"
 	"github.com/hashicorp/terraform/helper/resource"
 	"github.com/hashicorp/terraform/plugin"
@@ -254,20 +253,35 @@ func enableForceDestroyAttributes(state cty.Value) cty.Value {
 	return cty.ObjectVal(stateWithDestroyAttrs)
 }
 
-// Install installs a Terraform Provider Plugin binary with a given version.
+// Install installs a Terraform Provider Plugin binary with a given name and version.
+// If the binary has already been installed previously, it isn't redownloaded.
 // For example, call:
 //   Install("aws", "2.43.0", "~/.terradozer")
-func Install(providerName, versionConstraint, installDir string) (discovery.PluginMeta, error) {
+func Install(providerName, providerVersion, installDir string) (discovery.PluginMeta, error) {
 	expandedInstallDir, err := goHomeDir.Expand(installDir)
 	if err != nil {
 		return discovery.PluginMeta{}, err
 	}
 
-	// if path to provider binary already exists, return the path to executable instead of reinstalling it
 	plugins := discovery.FindPlugins("provider", []string{expandedInstallDir})
 
-	for p := range plugins {
-		if p.Name == providerName && p.Version == discovery.VersionStr(versionConstraint) {
+	version, err := discovery.VersionStr(providerVersion).Parse()
+	if err != nil {
+		return discovery.PluginMeta{}, fmt.Errorf("failed to parse provider version: %s", err)
+	}
+
+	for p := range plugins.WithName(providerName) {
+		pVersion, err := p.Version.Parse()
+		if err != nil {
+			return discovery.PluginMeta{}, err
+		}
+
+		if version.Equal(pVersion) {
+			log.WithFields(log.Fields{
+				"name":    p.Name,
+				"version": p.Version,
+				"path":    p.Path,
+			}).Debugf("found already installed Terraform provider")
 			return p, nil
 		}
 	}
@@ -283,18 +297,18 @@ func Install(providerName, versionConstraint, installDir string) (discovery.Plug
 		},
 	}
 
-	providerConstraint := discovery.AllVersions
-
-	if versionConstraint != "" {
-		constraints, err := version.NewConstraint(versionConstraint)
-		if err != nil {
-			return discovery.PluginMeta{}, fmt.Errorf("failed to parse provider version constraint: %s", err)
-		}
-
-		providerConstraint = discovery.NewConstraints(constraints)
+	providerConstraint, err := discovery.ConstraintStr(providerVersion).Parse()
+	if err != nil {
+		return discovery.PluginMeta{}, fmt.Errorf("failed to parse provider version constraint: %s", err)
 	}
 
 	pty := addrs.NewLegacyProvider(providerName)
+
+	log.WithFields(log.Fields{
+		"name":               providerName,
+		"version_constraint": providerConstraint.String(),
+		"install_dir":        expandedInstallDir,
+	}).Debugf("download and install Terraform provider")
 
 	meta, tfDiagnostics, err := providerInstaller.Get(pty, providerConstraint)
 	if err != nil {
