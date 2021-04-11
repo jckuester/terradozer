@@ -6,14 +6,14 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/jckuester/terradozer/pkg/provider"
-	"github.com/jckuester/terradozer/test"
-
 	"github.com/gruntwork-io/terratest/modules/aws"
 	"github.com/gruntwork-io/terratest/modules/terraform"
+	"github.com/jckuester/terradozer/pkg/provider"
+	"github.com/jckuester/terradozer/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zclconf/go-cty/cty"
@@ -34,9 +34,16 @@ func TestInstall_Cache(t *testing.T) {
 		expectedChecksum string
 	}{
 		{
-			name:             "cache Terraform AWS Provider",
+			name:             "version without prefix",
 			providerName:     "aws",
 			constraint:       "2.43.0",
+			expectedFile:     ".terradozer/terraform-provider-aws_v2.43.0_x4",
+			expectedChecksum: "d8a5e7969884c03cecbfd64fb3add8c542c918c5a8c259d1b31fadbbee284fb7",
+		},
+		{
+			name:             "version prefixed with v",
+			providerName:     "aws",
+			constraint:       "v2.43.0",
 			expectedFile:     ".terradozer/terraform-provider-aws_v2.43.0_x4",
 			expectedChecksum: "d8a5e7969884c03cecbfd64fb3add8c542c918c5a8c259d1b31fadbbee284fb7",
 		},
@@ -55,7 +62,7 @@ func TestInstall_Cache(t *testing.T) {
 			defer f.Close()
 
 			assert.Equal(t, tc.providerName, p.Name)
-			assert.Equal(t, tc.constraint, p.Version.MustParse().String())
+			assert.Equal(t, strings.Trim(tc.constraint, "v"), p.Version.MustParse().String())
 			assert.Equal(t, tc.expectedChecksum, checksum(t, f))
 
 			modTime := modifiedTime(t, tc.expectedFile)
@@ -66,7 +73,7 @@ func TestInstall_Cache(t *testing.T) {
 			require.NoError(t, err)
 
 			assert.Equal(t, tc.providerName, p2.Name)
-			assert.Equal(t, tc.constraint, p2.Version.MustParse().String())
+			assert.Equal(t, strings.Trim(tc.constraint, "v"), p2.Version.MustParse().String())
 
 			modTimeAfterSecondInstall := modifiedTime(t, tc.expectedFile)
 
