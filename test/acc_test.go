@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jckuester/awstools-lib/test"
+
 	"github.com/gruntwork-io/terratest/modules/aws"
 	"github.com/gruntwork-io/terratest/modules/terraform"
 	"github.com/onsi/gomega/gexec"
@@ -81,18 +83,18 @@ func TestAcc_ConfirmDeletion(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			env := InitEnv(t)
+			env := test.Init(t)
 
 			terraformDir := "./test-fixtures/single-resource/aws-vpc"
 
-			terraformOptions := GetTerraformOptions(terraformDir, env)
+			terraformOptions := test.GetTerraformOptions(testTfStateBucket, terraformDir, env)
 
 			defer terraform.Destroy(t, terraformOptions)
 
 			terraform.InitAndApply(t, terraformOptions)
 
 			actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
-			aws.GetVpcById(t, actualVpcID, env.AWSRegion)
+			aws.GetVpcById(t, actualVpcID, env.AWSRegion1)
 
 			tfstateFile, err := WriteRemoteStateToLocalFile(t, env, terraformOptions)
 			defer os.Remove(tfstateFile)
@@ -126,18 +128,18 @@ func TestAcc_AllResourcesAlreadyDeleted(t *testing.T) {
 		t.Skip("Skipping acceptance test.")
 	}
 
-	env := InitEnv(t)
+	env := test.Init(t)
 
 	terraformDir := "./test-fixtures/single-resource/aws-vpc"
 
-	terraformOptions := GetTerraformOptions(terraformDir, env)
+	terraformOptions := test.GetTerraformOptions(testTfStateBucket, terraformDir, env)
 
 	defer terraform.Destroy(t, terraformOptions)
 
 	terraform.InitAndApply(t, terraformOptions)
 
 	actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
-	aws.GetVpcById(t, actualVpcID, env.AWSRegion)
+	aws.GetVpcById(t, actualVpcID, env.AWSRegion1)
 
 	tfstateFile, err := WriteRemoteStateToLocalFile(t, env, terraformOptions)
 	defer os.Remove(tfstateFile)
@@ -247,18 +249,18 @@ func TestAcc_DryRun(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			env := InitEnv(t)
+			env := test.Init(t)
 
 			terraformDir := "./test-fixtures/single-resource/aws-vpc"
 
-			terraformOptions := GetTerraformOptions(terraformDir, env)
+			terraformOptions := test.GetTerraformOptions(testTfStateBucket, terraformDir, env)
 
 			defer terraform.Destroy(t, terraformOptions)
 
 			terraform.InitAndApply(t, terraformOptions)
 
 			actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
-			aws.GetVpcById(t, actualVpcID, env.AWSRegion)
+			aws.GetVpcById(t, actualVpcID, env.AWSRegion1)
 
 			tfstateFile, err := WriteRemoteStateToLocalFile(t, env, terraformOptions)
 			defer os.Remove(tfstateFile)
@@ -345,18 +347,18 @@ func TestAcc_Force(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			env := InitEnv(t)
+			env := test.Init(t)
 
 			terraformDir := "./test-fixtures/single-resource/aws-vpc"
 
-			terraformOptions := GetTerraformOptions(terraformDir, env)
+			terraformOptions := test.GetTerraformOptions(testTfStateBucket, terraformDir, env)
 
 			defer terraform.Destroy(t, terraformOptions)
 
 			terraform.InitAndApply(t, terraformOptions)
 
 			actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
-			aws.GetVpcById(t, actualVpcID, env.AWSRegion)
+			aws.GetVpcById(t, actualVpcID, env.AWSRegion1)
 
 			tfstateFile, err := WriteRemoteStateToLocalFile(t, env, terraformOptions)
 			defer os.Remove(tfstateFile)
@@ -396,24 +398,24 @@ func TestAcc_DeleteDependentResources(t *testing.T) {
 		t.Skip("Skipping acceptance test.")
 	}
 
-	env := InitEnv(t)
+	env := test.Init(t)
 
 	terraformDir := "./test-fixtures/dependent-resources"
 
-	terraformOptions := GetTerraformOptions(terraformDir, env)
+	terraformOptions := test.GetTerraformOptions(testTfStateBucket, terraformDir, env)
 
 	defer terraform.Destroy(t, terraformOptions)
 
 	terraform.InitAndApply(t, terraformOptions)
 
 	actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
-	aws.GetVpcById(t, actualVpcID, env.AWSRegion)
+	aws.GetVpcById(t, actualVpcID, env.AWSRegion1)
 
 	actualIamRole := terraform.Output(t, terraformOptions, "role_name")
-	AssertIamRoleExists(t, env.AWSRegion, actualIamRole)
+	AssertIamRoleExists(t, env.AWSRegion1, actualIamRole)
 
 	actualIamPolicyARN := terraform.Output(t, terraformOptions, "policy_arn")
-	AssertIamPolicyExists(t, env.AWSRegion, actualIamPolicyARN)
+	AssertIamPolicyExists(t, env.AWSRegion1, actualIamPolicyARN)
 
 	tfstateFile, err := WriteRemoteStateToLocalFile(t, env, terraformOptions)
 	defer os.Remove(tfstateFile)
@@ -431,18 +433,18 @@ func TestAcc_SkipUnsupportedProvider(t *testing.T) {
 		t.Skip("Skipping acceptance test.")
 	}
 
-	env := InitEnv(t)
+	env := test.Init(t)
 
 	terraformDir := "./test-fixtures/unsupported-provider"
 
-	terraformOptions := GetTerraformOptions(terraformDir, env)
+	terraformOptions := test.GetTerraformOptions(testTfStateBucket, terraformDir, env)
 
 	defer terraform.Destroy(t, terraformOptions)
 
 	terraform.InitAndApply(t, terraformOptions)
 
 	actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
-	aws.GetVpcById(t, actualVpcID, env.AWSRegion)
+	aws.GetVpcById(t, actualVpcID, env.AWSRegion1)
 
 	tfstateFile, err := WriteRemoteStateToLocalFile(t, env, terraformOptions)
 	defer os.Remove(tfstateFile)
@@ -458,24 +460,24 @@ func TestAcc_DeleteTimeout(t *testing.T) {
 		t.Skip("Skipping acceptance test.")
 	}
 
-	env := InitEnv(t)
+	env := test.Init(t)
 
 	terraformDir := "./test-fixtures/single-resource/aws-vpc"
 
-	terraformOptions := GetTerraformOptions(terraformDir, env)
+	terraformOptions := test.GetTerraformOptions(testTfStateBucket, terraformDir, env)
 
 	defer terraform.Destroy(t, terraformOptions)
 
 	terraform.InitAndApply(t, terraformOptions)
 
 	actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
-	aws.GetVpcById(t, actualVpcID, env.AWSRegion)
+	aws.GetVpcById(t, actualVpcID, env.AWSRegion1)
 
 	// apply dependency
 
 	terraformDirDependency := "./test-fixtures/single-resource/aws-vpc/dependency"
 
-	terraformOptionsDependency := GetTerraformOptions(terraformDirDependency, env,
+	terraformOptionsDependency := test.GetTerraformOptions(testTfStateBucket, terraformDirDependency, env,
 		map[string]interface{}{"vpc_id": actualVpcID})
 
 	defer terraform.Destroy(t, terraformOptionsDependency)
@@ -501,18 +503,18 @@ func TestAcc_DeleteNonEmptyAwsS3Bucket(t *testing.T) {
 		t.Skip("Skipping acceptance test.")
 	}
 
-	env := InitEnv(t)
+	env := test.Init(t)
 
 	terraformDir := "./test-fixtures/non-empty-bucket"
 
-	terraformOptions := GetTerraformOptions(terraformDir, env)
+	terraformOptions := test.GetTerraformOptions(testTfStateBucket, terraformDir, env)
 
 	defer terraform.Destroy(t, terraformOptions)
 
 	terraform.InitAndApply(t, terraformOptions)
 
 	actualBucketName := terraform.Output(t, terraformOptions, "bucket_name")
-	aws.AssertS3BucketExists(t, env.AWSRegion, actualBucketName)
+	aws.AssertS3BucketExists(t, env.AWSRegion1, actualBucketName)
 
 	tfstateFile, err := WriteRemoteStateToLocalFile(t, env, terraformOptions)
 	defer os.Remove(tfstateFile)
@@ -530,18 +532,18 @@ func TestAcc_DeleteAwsIamRoleWithAttachedPolicy(t *testing.T) {
 		t.Skip("Skipping acceptance test.")
 	}
 
-	env := InitEnv(t)
+	env := test.Init(t)
 
 	terraformDir := "./test-fixtures/attached-policy"
 
-	terraformOptions := GetTerraformOptions(terraformDir, env)
+	terraformOptions := test.GetTerraformOptions(testTfStateBucket, terraformDir, env)
 
 	defer terraform.Destroy(t, terraformOptions)
 
 	terraform.InitAndApply(t, terraformOptions)
 
 	actualIamRole := terraform.Output(t, terraformOptions, "role_name")
-	AssertIamRoleExists(t, env.AWSRegion, actualIamRole)
+	AssertIamRoleExists(t, env.AWSRegion1, actualIamRole)
 
 	tfstateFile, err := WriteRemoteStateToLocalFile(t, env, terraformOptions)
 	defer os.Remove(tfstateFile)

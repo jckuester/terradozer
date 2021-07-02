@@ -5,83 +5,23 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"strings"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/service/ecs"
-
 	"github.com/aws/aws-sdk-go/aws/awserr"
-
-	"github.com/aws/aws-sdk-go/service/lambda"
-
+	"github.com/aws/aws-sdk-go/service/ecs"
 	"github.com/aws/aws-sdk-go/service/iam"
+	"github.com/aws/aws-sdk-go/service/lambda"
 	"github.com/gruntwork-io/terratest/modules/aws"
-	"github.com/gruntwork-io/terratest/modules/random"
 	"github.com/gruntwork-io/terratest/modules/terraform"
+	"github.com/jckuester/awstools-lib/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 const testTfStateBucket = "terradozer-testacc-tfstate-492043"
 
-// EnvVars contains environment variables for that must be set for tests.
-type EnvVars struct {
-	AWSRegion  string
-	AWSProfile string
-}
-
-// InitEnv sets environment variables for acceptance tests.
-func InitEnv(t *testing.T) EnvVars {
-	t.Helper()
-
-	profile := os.Getenv("AWS_PROFILE")
-	if profile == "" {
-		t.Fatal("env variable AWS_PROFILE needs to be set for tests")
-	}
-
-	region := os.Getenv("AWS_DEFAULT_REGION")
-	if region == "" {
-		t.Fatal("env variable AWS_DEFAULT_REGION needs to be set for tests")
-	}
-
-	return EnvVars{
-		AWSProfile: profile,
-		AWSRegion:  region,
-	}
-}
-
-func GetTerraformOptions(terraformDir string, env EnvVars, optionalVars ...map[string]interface{}) *terraform.Options {
-	name := "terradozer-testacc-" + strings.ToLower(random.UniqueId())
-
-	vars := map[string]interface{}{
-		"region":  env.AWSRegion,
-		"profile": env.AWSProfile,
-		"name":    name,
-	}
-
-	if len(optionalVars) > 0 {
-		for k, v := range optionalVars[0] {
-			vars[k] = v
-		}
-	}
-
-	return &terraform.Options{
-		TerraformDir: terraformDir,
-		NoColor:      true,
-		Vars:         vars,
-		// BackendConfig defines where to store the Terraform state files of tests
-		BackendConfig: map[string]interface{}{
-			"bucket":  testTfStateBucket,
-			"key":     fmt.Sprintf("%s.tfstate", name),
-			"region":  env.AWSRegion,
-			"profile": env.AWSProfile,
-			"encrypt": true,
-		},
-	}
-}
-
-func WriteRemoteStateToLocalFile(t *testing.T, env EnvVars, terraformOptions *terraform.Options) (string, error) {
-	tfstate := aws.GetS3ObjectContents(t, env.AWSRegion,
+func WriteRemoteStateToLocalFile(t *testing.T, env test.Vars, terraformOptions *terraform.Options) (string, error) {
+	tfstate := aws.GetS3ObjectContents(t, env.AWSRegion1,
 		terraformOptions.BackendConfig["bucket"].(string),
 		terraformOptions.BackendConfig["key"].(string))
 
@@ -140,48 +80,48 @@ func AssertIamPolicyExistsE(t *testing.T, region string, arn string) error {
 }
 
 // AssertIamRoleDeleted checks if an IAM role has been deleted.
-func AssertIamRoleDeleted(t *testing.T, actualIamRole string, env EnvVars) {
-	err := AssertIamRoleExistsE(t, env.AWSRegion, actualIamRole)
+func AssertIamRoleDeleted(t *testing.T, actualIamRole string, env test.Vars) {
+	err := AssertIamRoleExistsE(t, env.AWSRegion1, actualIamRole)
 	assert.Error(t, err, "resource hasn't been deleted")
 }
 
 // AssertIamPolicyDeleted checks if an IAM policy has been deleted.
-func AssertIamPolicyDeleted(t *testing.T, actualIamPolicyARN string, env EnvVars) {
-	err := AssertIamPolicyExistsE(t, env.AWSRegion, actualIamPolicyARN)
+func AssertIamPolicyDeleted(t *testing.T, actualIamPolicyARN string, env test.Vars) {
+	err := AssertIamPolicyExistsE(t, env.AWSRegion1, actualIamPolicyARN)
 	assert.Error(t, err, "resource hasn't been deleted")
 }
 
-func AssertVpcExists(t *testing.T, actualVpcID string, env EnvVars) {
-	_, err := aws.GetVpcByIdE(t, actualVpcID, env.AWSRegion)
+func AssertVpcExists(t *testing.T, actualVpcID string, env test.Vars) {
+	_, err := aws.GetVpcByIdE(t, actualVpcID, env.AWSRegion1)
 	assert.NoError(t, err, "resource has been unexpectedly deleted")
 }
 
 // AssertVpcDeleted checks if an VPC has been deleted.
-func AssertVpcDeleted(t *testing.T, actualVpcID string, env EnvVars) {
-	_, err := aws.GetVpcByIdE(t, actualVpcID, env.AWSRegion)
+func AssertVpcDeleted(t *testing.T, actualVpcID string, env test.Vars) {
+	_, err := aws.GetVpcByIdE(t, actualVpcID, env.AWSRegion1)
 	assert.Error(t, err, "resource hasn't been deleted")
 }
 
 // AssertBucketDeleted checks if an AWS S3 bucket has been deleted.
-func AssertBucketDeleted(t *testing.T, actualBucketName string, env EnvVars) {
-	err := aws.AssertS3BucketExistsE(t, env.AWSRegion, actualBucketName)
+func AssertBucketDeleted(t *testing.T, actualBucketName string, env test.Vars) {
+	err := aws.AssertS3BucketExistsE(t, env.AWSRegion1, actualBucketName)
 	assert.Error(t, err, "resource hasn't been deleted")
 }
 
-func AssertEcsClusterExists(t *testing.T, env EnvVars, id string) {
+func AssertEcsClusterExists(t *testing.T, env test.Vars, id string) {
 	assert.True(t, ecsClusterExists(t, env, id))
 }
 
-func AssertEcsClusterDeleted(t *testing.T, env EnvVars, id string) {
+func AssertEcsClusterDeleted(t *testing.T, env test.Vars, id string) {
 	assert.False(t, ecsClusterExists(t, env, id))
 }
 
-func ecsClusterExists(t *testing.T, env EnvVars, id string) bool {
+func ecsClusterExists(t *testing.T, env test.Vars, id string) bool {
 	opts := &ecs.DescribeClustersInput{
 		Clusters: []*string{&id},
 	}
 
-	resp, err := aws.NewEcsClient(t, env.AWSRegion).DescribeClusters(opts)
+	resp, err := aws.NewEcsClient(t, env.AWSRegion1).DescribeClusters(opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,20 +137,20 @@ func ecsClusterExists(t *testing.T, env EnvVars, id string) bool {
 	return true
 }
 
-func AssertLambdaFunctionExists(t *testing.T, env EnvVars, id string) {
+func AssertLambdaFunctionExists(t *testing.T, env test.Vars, id string) {
 	assert.True(t, lambdaFunctionExists(t, env, id))
 }
 
-func AssertLambdaFunctionDeleted(t *testing.T, env EnvVars, id string) {
+func AssertLambdaFunctionDeleted(t *testing.T, env test.Vars, id string) {
 	assert.False(t, lambdaFunctionExists(t, env, id))
 }
 
-func lambdaFunctionExists(t *testing.T, env EnvVars, id string) bool {
+func lambdaFunctionExists(t *testing.T, env test.Vars, id string) bool {
 	opts := &lambda.GetFunctionInput{
 		FunctionName: &id,
 	}
 
-	_, err := NewLambdaClient(t, env.AWSRegion).GetFunction(opts)
+	_, err := NewLambdaClient(t, env.AWSRegion1).GetFunction(opts)
 	if err != nil {
 		awsErr, ok := err.(awserr.Error)
 		if !ok {

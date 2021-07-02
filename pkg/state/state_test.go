@@ -4,19 +4,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zclconf/go-cty/cty"
-
-	"github.com/jckuester/terradozer/test"
-
-	"github.com/jckuester/terradozer/pkg/state"
-
+	"github.com/jckuester/awstools-lib/terraform/provider"
+	"github.com/jckuester/awstools-lib/test"
 	"github.com/jckuester/terradozer/pkg/resource"
-
-	"github.com/jckuester/terradozer/pkg/provider"
-
+	"github.com/jckuester/terradozer/pkg/state"
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
+	"github.com/zclconf/go-cty/cty"
 )
 
 func TestNewState(t *testing.T) {
@@ -107,7 +101,7 @@ func TestState_Resources(t *testing.T) {
 		t.Skip("Skipping integration test.")
 	}
 
-	test.InitEnv(t)
+	test.Init(t)
 
 	awsProvider, err := provider.Init("aws", ".terradozer", 10*time.Second)
 	require.NoError(t, err)

@@ -11,8 +11,8 @@ import (
 	"github.com/hashicorp/terraform/addrs"
 	"github.com/hashicorp/terraform/states"
 	"github.com/hashicorp/terraform/states/statefile"
+	"github.com/jckuester/awstools-lib/terraform/provider"
 	"github.com/jckuester/terradozer/internal"
-	"github.com/jckuester/terradozer/pkg/provider"
 	"github.com/jckuester/terradozer/pkg/resource"
 	"github.com/zclconf/go-cty/cty"
 )
