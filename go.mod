@@ -9,7 +9,7 @@ require (
 	github.com/golang/mock v1.4.0
 	github.com/gruntwork-io/terratest v0.23.0
 	github.com/hashicorp/terraform v0.12.31
-	github.com/jckuester/awstools-lib v0.0.0-20210702114917-a156a908587c
+	github.com/jckuester/awstools-lib v0.0.0-20210708105939-54c0edede8d3
 	github.com/onsi/gomega v1.9.0
 	github.com/stretchr/testify v1.7.0
 	github.com/zclconf/go-cty v1.7.1
