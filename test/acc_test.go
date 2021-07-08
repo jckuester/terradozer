@@ -10,10 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jckuester/awstools-lib/test"
-
 	"github.com/gruntwork-io/terratest/modules/aws"
 	"github.com/gruntwork-io/terratest/modules/terraform"
+	testUtil "github.com/jckuester/awstools-lib/test"
 	"github.com/onsi/gomega/gexec"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -45,7 +44,7 @@ FLAGS:
 
 func TestAcc_ConfirmDeletion(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping acceptance test.")
+		t.Skip("Skipping acceptance testUtil.")
 	}
 
 	tests := []struct {
@@ -83,11 +82,11 @@ func TestAcc_ConfirmDeletion(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			env := test.Init(t)
+			env := testUtil.Init(t)
 
 			terraformDir := "./test-fixtures/single-resource/aws-vpc"
 
-			terraformOptions := test.GetTerraformOptions(testTfStateBucket, terraformDir, env)
+			terraformOptions := testUtil.GetTerraformOptions(TfStateBucket, terraformDir, env)
 
 			defer terraform.Destroy(t, terraformOptions)
 
@@ -125,14 +124,14 @@ func TestAcc_ConfirmDeletion(t *testing.T) {
 
 func TestAcc_AllResourcesAlreadyDeleted(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping acceptance test.")
+		t.Skip("Skipping acceptance testUtil.")
 	}
 
-	env := test.Init(t)
+	env := testUtil.Init(t)
 
 	terraformDir := "./test-fixtures/single-resource/aws-vpc"
 
-	terraformOptions := test.GetTerraformOptions(testTfStateBucket, terraformDir, env)
+	terraformOptions := testUtil.GetTerraformOptions(TfStateBucket, terraformDir, env)
 
 	defer terraform.Destroy(t, terraformOptions)
 
@@ -163,7 +162,7 @@ func TestAcc_AllResourcesAlreadyDeleted(t *testing.T) {
 
 func TestAcc_Version(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping acceptance test.")
+		t.Skip("Skipping acceptance testUtil.")
 	}
 
 	logBuffer, err := runBinary(t, "", "-version")
@@ -182,7 +181,7 @@ using: %s`, runtime.Version()))
 
 func TestAcc_MissingStatePathArgument(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping acceptance test.")
+		t.Skip("Skipping acceptance testUtil.")
 	}
 
 	logBuffer, err := runBinary(t, "")
@@ -198,7 +197,7 @@ func TestAcc_MissingStatePathArgument(t *testing.T) {
 
 func TestAcc_UndefinedFlag(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping acceptance test.")
+		t.Skip("Skipping acceptance testUtil.")
 	}
 
 	logBuffer, err := runBinary(t, "", "-foo")
@@ -214,7 +213,7 @@ func TestAcc_UndefinedFlag(t *testing.T) {
 
 func TestAcc_DryRun(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping acceptance test.")
+		t.Skip("Skipping acceptance testUtil.")
 	}
 
 	tests := []struct {
@@ -249,11 +248,11 @@ func TestAcc_DryRun(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			env := test.Init(t)
+			env := testUtil.Init(t)
 
 			terraformDir := "./test-fixtures/single-resource/aws-vpc"
 
-			terraformOptions := test.GetTerraformOptions(testTfStateBucket, terraformDir, env)
+			terraformOptions := testUtil.GetTerraformOptions(TfStateBucket, terraformDir, env)
 
 			defer terraform.Destroy(t, terraformOptions)
 
@@ -297,7 +296,7 @@ func TestAcc_DryRun(t *testing.T) {
 
 func TestAcc_Force(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping acceptance test.")
+		t.Skip("Skipping acceptance testUtil.")
 	}
 
 	tests := []struct {
@@ -347,11 +346,11 @@ func TestAcc_Force(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			env := test.Init(t)
+			env := testUtil.Init(t)
 
 			terraformDir := "./test-fixtures/single-resource/aws-vpc"
 
-			terraformOptions := test.GetTerraformOptions(testTfStateBucket, terraformDir, env)
+			terraformOptions := testUtil.GetTerraformOptions(TfStateBucket, terraformDir, env)
 
 			defer terraform.Destroy(t, terraformOptions)
 
@@ -395,14 +394,14 @@ func TestAcc_Force(t *testing.T) {
 
 func TestAcc_DeleteDependentResources(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping acceptance test.")
+		t.Skip("Skipping acceptance testUtil.")
 	}
 
-	env := test.Init(t)
+	env := testUtil.Init(t)
 
 	terraformDir := "./test-fixtures/dependent-resources"
 
-	terraformOptions := test.GetTerraformOptions(testTfStateBucket, terraformDir, env)
+	terraformOptions := testUtil.GetTerraformOptions(TfStateBucket, terraformDir, env)
 
 	defer terraform.Destroy(t, terraformOptions)
 
@@ -430,14 +429,14 @@ func TestAcc_DeleteDependentResources(t *testing.T) {
 
 func TestAcc_SkipUnsupportedProvider(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping acceptance test.")
+		t.Skip("Skipping acceptance testUtil.")
 	}
 
-	env := test.Init(t)
+	env := testUtil.Init(t)
 
 	terraformDir := "./test-fixtures/unsupported-provider"
 
-	terraformOptions := test.GetTerraformOptions(testTfStateBucket, terraformDir, env)
+	terraformOptions := testUtil.GetTerraformOptions(TfStateBucket, terraformDir, env)
 
 	defer terraform.Destroy(t, terraformOptions)
 
@@ -457,14 +456,14 @@ func TestAcc_SkipUnsupportedProvider(t *testing.T) {
 
 func TestAcc_DeleteTimeout(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping acceptance test.")
+		t.Skip("Skipping acceptance testUtil.")
 	}
 
-	env := test.Init(t)
+	env := testUtil.Init(t)
 
 	terraformDir := "./test-fixtures/single-resource/aws-vpc"
 
-	terraformOptions := test.GetTerraformOptions(testTfStateBucket, terraformDir, env)
+	terraformOptions := testUtil.GetTerraformOptions(TfStateBucket, terraformDir, env)
 
 	defer terraform.Destroy(t, terraformOptions)
 
@@ -477,7 +476,7 @@ func TestAcc_DeleteTimeout(t *testing.T) {
 
 	terraformDirDependency := "./test-fixtures/single-resource/aws-vpc/dependency"
 
-	terraformOptionsDependency := test.GetTerraformOptions(testTfStateBucket, terraformDirDependency, env,
+	terraformOptionsDependency := testUtil.GetTerraformOptions(TfStateBucket, terraformDirDependency, env,
 		map[string]interface{}{"vpc_id": actualVpcID})
 
 	defer terraform.Destroy(t, terraformOptionsDependency)
@@ -500,14 +499,14 @@ func TestAcc_DeleteTimeout(t *testing.T) {
 
 func TestAcc_DeleteNonEmptyAwsS3Bucket(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping acceptance test.")
+		t.Skip("Skipping acceptance testUtil.")
 	}
 
-	env := test.Init(t)
+	env := testUtil.Init(t)
 
 	terraformDir := "./test-fixtures/non-empty-bucket"
 
-	terraformOptions := test.GetTerraformOptions(testTfStateBucket, terraformDir, env)
+	terraformOptions := testUtil.GetTerraformOptions(TfStateBucket, terraformDir, env)
 
 	defer terraform.Destroy(t, terraformOptions)
 
@@ -529,14 +528,14 @@ func TestAcc_DeleteNonEmptyAwsS3Bucket(t *testing.T) {
 
 func TestAcc_DeleteAwsIamRoleWithAttachedPolicy(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping acceptance test.")
+		t.Skip("Skipping acceptance testUtil.")
 	}
 
-	env := test.Init(t)
+	env := testUtil.Init(t)
 
 	terraformDir := "./test-fixtures/attached-policy"
 
-	terraformOptions := test.GetTerraformOptions(testTfStateBucket, terraformDir, env)
+	terraformOptions := testUtil.GetTerraformOptions(TfStateBucket, terraformDir, env)
 
 	defer terraform.Destroy(t, terraformOptions)
 

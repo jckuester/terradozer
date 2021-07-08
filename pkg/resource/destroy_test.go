@@ -5,16 +5,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gruntwork-io/terratest/modules/aws"
-	"github.com/gruntwork-io/terratest/modules/terraform"
-	"github.com/jckuester/terradozer/pkg/provider"
-	"github.com/jckuester/terradozer/test"
-	"github.com/stretchr/testify/require"
-
 	"github.com/apex/log"
 	"github.com/golang/mock/gomock"
+	"github.com/gruntwork-io/terratest/modules/aws"
+	"github.com/gruntwork-io/terratest/modules/terraform"
+	"github.com/jckuester/awstools-lib/terraform/provider"
+	testUtil "github.com/jckuester/awstools-lib/test"
 	"github.com/jckuester/terradozer/pkg/resource"
+	"github.com/jckuester/terradozer/test"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDestroyResources(t *testing.T) {
@@ -127,18 +127,18 @@ func TestResource_Destroy(t *testing.T) {
 		t.Skip("Skipping integration test.")
 	}
 
-	env := test.InitEnv(t)
+	env := testUtil.Init(t)
 
 	terraformDir := "../../test/test-fixtures/single-resource/aws-vpc"
 
-	terraformOptions := test.GetTerraformOptions(terraformDir, env)
+	terraformOptions := testUtil.GetTerraformOptions(test.TfStateBucket, terraformDir, env)
 
 	defer terraform.Destroy(t, terraformOptions)
 
 	terraform.InitAndApply(t, terraformOptions)
 
 	actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
-	aws.GetVpcById(t, actualVpcID, env.AWSRegion)
+	aws.GetVpcById(t, actualVpcID, env.AWSRegion1)
 
 	awsProvider, err := provider.Init("aws", ".terradozer", 10*time.Second)
 	require.NoError(t, err)
@@ -164,11 +164,11 @@ func TestResource_Destroy_AwsEcsCluster(t *testing.T) {
 
 	log.SetLevel(log.DebugLevel)
 
-	env := test.InitEnv(t)
+	env := testUtil.Init(t)
 
 	terraformDir := "../../test/test-fixtures/single-resource/aws-ecs-cluster"
 
-	terraformOptions := test.GetTerraformOptions(terraformDir, env)
+	terraformOptions := testUtil.GetTerraformOptions(test.TfStateBucket, terraformDir, env)
 
 	defer terraform.Destroy(t, terraformOptions)
 
@@ -204,11 +204,11 @@ func TestResource_Destroy_AwsLambdaFunction(t *testing.T) {
 
 	log.SetLevel(log.DebugLevel)
 
-	env := test.InitEnv(t)
+	env := testUtil.Init(t)
 
 	terraformDir := "../../test/test-fixtures/single-resource/aws-lambda-function"
 
-	terraformOptions := test.GetTerraformOptions(terraformDir, env)
+	terraformOptions := testUtil.GetTerraformOptions(test.TfStateBucket, terraformDir, env)
 
 	defer terraform.Destroy(t, terraformOptions)
 
@@ -232,24 +232,24 @@ func TestResource_Destroy_AwsLambdaFunction(t *testing.T) {
 }
 
 func TestResource_Destroy_Timeout(t *testing.T) {
-	env := test.InitEnv(t)
+	env := testUtil.Init(t)
 
 	terraformDir := "../../test/test-fixtures/single-resource/aws-vpc"
 
-	terraformOptions := test.GetTerraformOptions(terraformDir, env)
+	terraformOptions := testUtil.GetTerraformOptions(test.TfStateBucket, terraformDir, env)
 
 	defer terraform.Destroy(t, terraformOptions)
 
 	terraform.InitAndApply(t, terraformOptions)
 
 	actualVpcID := terraform.Output(t, terraformOptions, "vpc_id")
-	aws.GetVpcById(t, actualVpcID, env.AWSRegion)
+	aws.GetVpcById(t, actualVpcID, env.AWSRegion1)
 
 	// apply dependency
 
 	terraformDirDependency := "../../test/test-fixtures/single-resource/aws-vpc/dependency"
 
-	terraformOptionsDependency := test.GetTerraformOptions(terraformDirDependency, env,
+	terraformOptionsDependency := testUtil.GetTerraformOptions(test.TfStateBucket, terraformDirDependency, env,
 		map[string]interface{}{"vpc_id": actualVpcID})
 
 	defer terraform.Destroy(t, terraformOptionsDependency)

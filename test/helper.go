@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const testTfStateBucket = "terradozer-testacc-tfstate-492043"
+const TfStateBucket = "terradozer-testacc-tfstate-492043"
 
 func WriteRemoteStateToLocalFile(t *testing.T, env test.Vars, terraformOptions *terraform.Options) (string, error) {
 	tfstate := aws.GetS3ObjectContents(t, env.AWSRegion1,
