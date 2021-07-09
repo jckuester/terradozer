@@ -6,6 +6,7 @@ import (
 
 	"github.com/jckuester/awstools-lib/terraform/provider"
 	"github.com/jckuester/awstools-lib/test"
+	testUtil "github.com/jckuester/awstools-lib/test"
 	"github.com/jckuester/terradozer/pkg/resource"
 	"github.com/jckuester/terradozer/pkg/state"
 	"github.com/stretchr/testify/assert"
@@ -101,8 +102,15 @@ func TestState_Resources(t *testing.T) {
 		t.Skip("Skipping integration test.")
 	}
 
-	test.Init(t)
+	env := test.Init(t)
 
+	err := testUtil.SetMultiEnvs(map[string]string{
+		"AWS_PROFILE": env.AWSProfile1,
+		"AWS_REGION":  env.AWSRegion1,
+	})
+	require.NoError(t, err)
+
+	defer testUtil.UnsetAWSEnvs()
 	awsProvider, err := provider.Init("aws", ".terradozer", 10*time.Second)
 	require.NoError(t, err)
 

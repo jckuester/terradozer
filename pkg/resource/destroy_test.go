@@ -6,11 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gruntwork-io/terratest/modules/random"
-
 	"github.com/apex/log"
 	"github.com/golang/mock/gomock"
 	"github.com/gruntwork-io/terratest/modules/aws"
+	"github.com/gruntwork-io/terratest/modules/random"
 	"github.com/gruntwork-io/terratest/modules/terraform"
 	"github.com/jckuester/awstools-lib/terraform/provider"
 	testUtil "github.com/jckuester/awstools-lib/test"

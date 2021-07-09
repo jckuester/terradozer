@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gruntwork-io/terratest/modules/aws"
+	"github.com/gruntwork-io/terratest/modules/random"
 	"github.com/gruntwork-io/terratest/modules/terraform"
 	testUtil "github.com/jckuester/awstools-lib/test"
 	"github.com/onsi/gomega/gexec"
@@ -84,6 +85,12 @@ func TestAcc_ConfirmDeletion(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			env := testUtil.Init(t)
 
+			err := testUtil.SetMultiEnvs(map[string]string{
+				"AWS_PROFILE": env.AWSProfile1,
+				"AWS_REGION":  env.AWSRegion1,
+			})
+			require.NoError(t, err)
+
 			terraformDir := "./test-fixtures/single-resource/aws-vpc"
 
 			terraformOptions := testUtil.GetTerraformOptions(TfStateBucket, terraformDir, env)
@@ -96,6 +103,8 @@ func TestAcc_ConfirmDeletion(t *testing.T) {
 			aws.GetVpcById(t, actualVpcID, env.AWSRegion1)
 
 			tfstateFile, err := WriteRemoteStateToLocalFile(t, env, terraformOptions)
+			require.NoError(t, err)
+
 			defer os.Remove(tfstateFile)
 
 			logBuffer, err := runBinary(t, tc.userInput, tfstateFile)
@@ -128,6 +137,12 @@ func TestAcc_AllResourcesAlreadyDeleted(t *testing.T) {
 	}
 
 	env := testUtil.Init(t)
+
+	err := testUtil.SetMultiEnvs(map[string]string{
+		"AWS_PROFILE": env.AWSProfile1,
+		"AWS_REGION":  env.AWSRegion1,
+	})
+	require.NoError(t, err)
 
 	terraformDir := "./test-fixtures/single-resource/aws-vpc"
 
@@ -250,6 +265,12 @@ func TestAcc_DryRun(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			env := testUtil.Init(t)
 
+			err := testUtil.SetMultiEnvs(map[string]string{
+				"AWS_PROFILE": env.AWSProfile1,
+				"AWS_REGION":  env.AWSRegion1,
+			})
+			require.NoError(t, err)
+
 			terraformDir := "./test-fixtures/single-resource/aws-vpc"
 
 			terraformOptions := testUtil.GetTerraformOptions(TfStateBucket, terraformDir, env)
@@ -348,6 +369,12 @@ func TestAcc_Force(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			env := testUtil.Init(t)
 
+			err := testUtil.SetMultiEnvs(map[string]string{
+				"AWS_PROFILE": env.AWSProfile1,
+				"AWS_REGION":  env.AWSRegion1,
+			})
+			require.NoError(t, err)
+
 			terraformDir := "./test-fixtures/single-resource/aws-vpc"
 
 			terraformOptions := testUtil.GetTerraformOptions(TfStateBucket, terraformDir, env)
@@ -399,6 +426,12 @@ func TestAcc_DeleteDependentResources(t *testing.T) {
 
 	env := testUtil.Init(t)
 
+	err := testUtil.SetMultiEnvs(map[string]string{
+		"AWS_PROFILE": env.AWSProfile1,
+		"AWS_REGION":  env.AWSRegion1,
+	})
+	require.NoError(t, err)
+
 	terraformDir := "./test-fixtures/dependent-resources"
 
 	terraformOptions := testUtil.GetTerraformOptions(TfStateBucket, terraformDir, env)
@@ -434,6 +467,12 @@ func TestAcc_SkipUnsupportedProvider(t *testing.T) {
 
 	env := testUtil.Init(t)
 
+	err := testUtil.SetMultiEnvs(map[string]string{
+		"AWS_PROFILE": env.AWSProfile1,
+		"AWS_REGION":  env.AWSRegion1,
+	})
+	require.NoError(t, err)
+
 	terraformDir := "./test-fixtures/unsupported-provider"
 
 	terraformOptions := testUtil.GetTerraformOptions(TfStateBucket, terraformDir, env)
@@ -461,6 +500,12 @@ func TestAcc_DeleteTimeout(t *testing.T) {
 
 	env := testUtil.Init(t)
 
+	err := testUtil.SetMultiEnvs(map[string]string{
+		"AWS_PROFILE": env.AWSProfile1,
+		"AWS_REGION":  env.AWSRegion1,
+	})
+	require.NoError(t, err)
+
 	terraformDir := "./test-fixtures/single-resource/aws-vpc"
 
 	terraformOptions := testUtil.GetTerraformOptions(TfStateBucket, terraformDir, env)
@@ -477,7 +522,12 @@ func TestAcc_DeleteTimeout(t *testing.T) {
 	terraformDirDependency := "./test-fixtures/single-resource/aws-vpc/dependency"
 
 	terraformOptionsDependency := testUtil.GetTerraformOptions(TfStateBucket, terraformDirDependency, env,
-		map[string]interface{}{"vpc_id": actualVpcID})
+		map[string]interface{}{
+			"profile": env.AWSProfile1,
+			"region":  env.AWSRegion1,
+			"name":    fmt.Sprintf("testacc-%s", strings.ToLower(random.UniqueId())),
+			"vpc_id":  actualVpcID,
+		})
 
 	defer terraform.Destroy(t, terraformOptionsDependency)
 
@@ -503,6 +553,12 @@ func TestAcc_DeleteNonEmptyAwsS3Bucket(t *testing.T) {
 	}
 
 	env := testUtil.Init(t)
+
+	err := testUtil.SetMultiEnvs(map[string]string{
+		"AWS_PROFILE": env.AWSProfile1,
+		"AWS_REGION":  env.AWSRegion1,
+	})
+	require.NoError(t, err)
 
 	terraformDir := "./test-fixtures/non-empty-bucket"
 
@@ -532,6 +588,12 @@ func TestAcc_DeleteAwsIamRoleWithAttachedPolicy(t *testing.T) {
 	}
 
 	env := testUtil.Init(t)
+
+	err := testUtil.SetMultiEnvs(map[string]string{
+		"AWS_PROFILE": env.AWSProfile1,
+		"AWS_REGION":  env.AWSRegion1,
+	})
+	require.NoError(t, err)
 
 	terraformDir := "./test-fixtures/attached-policy"
 
