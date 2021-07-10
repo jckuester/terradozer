@@ -2,7 +2,7 @@
 package resource
 
 import (
-	"github.com/jckuester/terradozer/pkg/provider"
+	"github.com/jckuester/awstools-lib/terraform/provider"
 	"github.com/zclconf/go-cty/cty"
 )
 

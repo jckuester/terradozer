@@ -16,8 +16,8 @@ import (
 	"github.com/apex/log"
 	"github.com/apex/log/handlers/cli"
 	"github.com/fatih/color"
+	"github.com/jckuester/awstools-lib/terraform/provider"
 	"github.com/jckuester/terradozer/internal"
-	"github.com/jckuester/terradozer/pkg/provider"
 	"github.com/jckuester/terradozer/pkg/resource"
 	"github.com/jckuester/terradozer/pkg/state"
 )
