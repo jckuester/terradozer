@@ -2,21 +2,14 @@
 package resource
 
 import (
+	"github.com/jckuester/awstools-lib/terraform"
 	"github.com/jckuester/awstools-lib/terraform/provider"
 	"github.com/zclconf/go-cty/cty"
 )
 
 // Resource represents a Terraform resource that can be destroyed.
 type Resource struct {
-	// terraformType is the Terraform type of a resource
-	terraformType string
-	// id is used by the provider to import and delete the resource
-	id string
-	// provider is able to delete a resource
-	provider *provider.TerraformProvider
-	// internal Terraform state of the resource
-	state *cty.Value
-	attrs map[string]cty.Value
+	terraform.Resource
 }
 
 // New creates a destroyable Terraform resource.
@@ -28,10 +21,12 @@ type Resource struct {
 // For some resources, additionally to the ID a list of attributes needs to be populated to destroy it.
 func New(terraformType, id string, attrs map[string]cty.Value, provider *provider.TerraformProvider) *Resource {
 	return &Resource{
-		terraformType: terraformType,
-		id:            id,
-		provider:      provider,
-		attrs:         attrs,
+		terraform.Resource{
+			Type:     terraformType,
+			ID:       id,
+			Provider: provider,
+			Attrs:    attrs,
+		},
 	}
 }
 
@@ -42,24 +37,26 @@ func New(terraformType, id string, attrs map[string]cty.Value, provider *provide
 // than with New(), which is used when the state is not known.
 func NewWithState(terraformType, id string, provider *provider.TerraformProvider, state *cty.Value) *Resource {
 	return &Resource{
-		terraformType: terraformType,
-		id:            id,
-		provider:      provider,
-		state:         state,
+		terraform.Resource{
+			Type:     terraformType,
+			ID:       id,
+			Provider: provider,
+			State:    state,
+		},
 	}
 }
 
 // Type returns the Terraform type of a resource.
 func (r Resource) Type() string {
-	return r.terraformType
+	return r.Resource.Type
 }
 
 // ID returns the Terraform ID of a resource.
 func (r Resource) ID() string {
-	return r.id
+	return r.Resource.ID
 }
 
 // State returns the internal Terraform state representation of a resource.
 func (r Resource) State() *cty.Value {
-	return r.state
+	return r.Resource.State
 }

@@ -58,7 +58,7 @@ To see all options, run `terradozer --help`. Provide credentials for the AWS acc
 via the usual [environment variables](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html), e.g.,
 `AWS_PROFILE=<myaccount>` and `AWS_DEFAULT_REGION=<myregion>`.
 
-The region information is needed as it is not stored as part of the state. Having multiple providers wit different
+The region information is needed as it is not stored as part of the state. Having multiple providers with different
 regions in one state file is not yet supported.
  
 ## How it works

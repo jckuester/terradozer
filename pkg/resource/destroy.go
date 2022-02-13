@@ -118,19 +118,19 @@ func workerDestroy(resources <-chan DestroyableResource, result chan<- workerRes
 
 // Destroy destroys a Terraform resource.
 func (r Resource) Destroy() error {
-	if r.state == nil {
+	if r.State() == nil {
 		return fmt.Errorf("resource state is nil; need to call update first")
 	}
 
-	err := r.provider.DestroyResource(r.terraformType, *r.state)
+	err := r.Provider.DestroyResource(r.Type(), *r.State())
 	if err != nil {
 		log.WithError(err).WithFields(log.Fields{
-			"id": r.id, "type": r.terraformType}).Debug(internal.Pad("failed to delete resource"))
+			"id": r.ID(), "type": r.Type()}).Debug(internal.Pad("failed to delete resource"))
 
 		return NewRetryDestroyError(err, &r)
 	}
 
-	log.WithField("id", r.id).Error(internal.Pad(r.terraformType))
+	log.WithField("id", r.ID()).Error(internal.Pad(r.Type()))
 
 	return nil
 }

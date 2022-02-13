@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jckuester/awstools-lib/terraform"
 	"github.com/jckuester/awstools-lib/terraform/provider"
 	"github.com/jckuester/awstools-lib/test"
 	testUtil "github.com/jckuester/awstools-lib/test"
@@ -117,7 +118,7 @@ func TestState_Resources(t *testing.T) {
 	tests := []struct {
 		name              string
 		pathToState       string
-		expectedResources []resource.UpdatableResource
+		expectedResources []terraform.UpdatableResource
 		expectedErrMsg    string
 		providers         map[string]*provider.TerraformProvider
 	}{
@@ -131,7 +132,7 @@ func TestState_Resources(t *testing.T) {
 			providers: map[string]*provider.TerraformProvider{
 				"aws": awsProvider,
 			},
-			expectedResources: []resource.UpdatableResource{
+			expectedResources: []terraform.UpdatableResource{
 				resource.NewWithState("aws_vpc",
 					"vpc-003104c0d87e7a9f4",
 					awsProvider, nil),

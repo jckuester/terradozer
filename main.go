@@ -1,7 +1,6 @@
 package main
 
 //nolint:lll
-//go:generate mockgen -source=pkg/resource/update.go -destination=pkg/resource/update_mock_test.go -package=resource_test
 //go:generate mockgen -source=pkg/resource/destroy.go -destination=pkg/resource/destroy_mock_test.go -package=resource_test
 
 import (
@@ -16,6 +15,7 @@ import (
 	"github.com/apex/log"
 	"github.com/apex/log/handlers/cli"
 	"github.com/fatih/color"
+	"github.com/jckuester/awstools-lib/terraform"
 	"github.com/jckuester/awstools-lib/terraform/provider"
 	"github.com/jckuester/terradozer/internal"
 	"github.com/jckuester/terradozer/pkg/resource"
@@ -122,7 +122,7 @@ func mainExitCode() int {
 		return 1
 	}
 
-	resourcesWithUpdatedState := resource.UpdateResources(resources, parallel)
+	resourcesWithUpdatedState := terraform.UpdateResources(resources, parallel)
 
 	if !force {
 		internal.LogTitle("showing resources that would be deleted (dry run)")
@@ -157,7 +157,7 @@ func mainExitCode() int {
 	return 0
 }
 
-func convertToDestroyableResources(resources []resource.UpdatableResource) []resource.DestroyableResource {
+func convertToDestroyableResources(resources []terraform.UpdatableResource) []resource.DestroyableResource {
 	var result []resource.DestroyableResource
 
 	for _, r := range resources {

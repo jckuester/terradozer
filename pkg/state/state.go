@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform/addrs"
 	"github.com/hashicorp/terraform/states"
 	"github.com/hashicorp/terraform/states/statefile"
+	"github.com/jckuester/awstools-lib/terraform"
 	"github.com/jckuester/awstools-lib/terraform/provider"
 	"github.com/jckuester/terradozer/internal"
 	"github.com/jckuester/terradozer/pkg/resource"
@@ -86,8 +87,8 @@ func removeDuplicates(elements []string) []string {
 //
 // Data sources are not returned as these are managed outside the scope of the state and
 // therefore shouldn't be destroyed.
-func (s *State) Resources(providers map[string]*provider.TerraformProvider) ([]resource.UpdatableResource, error) {
-	var resources []resource.UpdatableResource
+func (s *State) Resources(providers map[string]*provider.TerraformProvider) ([]terraform.UpdatableResource, error) {
+	var resources []terraform.UpdatableResource
 
 	for _, resAddr := range lookupAllResourceInstanceAddrs(s.state) {
 		log.WithField("absolute_address", resAddr.String()).
