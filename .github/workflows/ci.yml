@@ -12,6 +12,6 @@ jobs:
         go-version: 1.17
 
     - name: build
-      run: go build .
+      run: make build
     - name: test
-      run: go test ./...
+      run: make test
