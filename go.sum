@@ -397,8 +397,6 @@ github.com/jckuester/awsls v0.8.2/go.mod h1:yn+/A3rsO+71qjLZ/9A0yYa7Jw34zLLpBEqH
 github.com/jckuester/awsls v0.8.3/go.mod h1:U0clHlW/c05kB1Cb4qO5pwGjxtR1CeHpgUzHhhI93CE=
 github.com/jckuester/awstools-lib v0.0.0-20210215194522-14607cce3470/go.mod h1:71+ozVxBDbhfKZH5ybJVxWo+mO1SVfpGiLfwXU5qD/w=
 github.com/jckuester/awstools-lib v0.0.0-20210220131009-cbbff634aac8/go.mod h1:VnXw3pHiRaNKPzypiBk+814DUarSyNBExo5D4y77G7o=
-github.com/jckuester/awstools-lib v0.0.0-20210708104915-ea2fab2bc2c2 h1:sn+BnPfIr6KHBTWXzHUFLV4KsApFK/vWJCPoxWMenvM=
-github.com/jckuester/awstools-lib v0.0.0-20210708104915-ea2fab2bc2c2/go.mod h1:2tJLCfSvTBzdkgiwr+jzhvBgwup9tVry7wZ/EIEVzOM=
 github.com/jckuester/awstools-lib v0.0.0-20210708105939-54c0edede8d3 h1:Xo4rYyUqZ8soXumzFs4ORZVp+znCWaStCOCg7zewzso=
 github.com/jckuester/awstools-lib v0.0.0-20210708105939-54c0edede8d3/go.mod h1:2tJLCfSvTBzdkgiwr+jzhvBgwup9tVry7wZ/EIEVzOM=
 github.com/jckuester/terradozer v0.1.3/go.mod h1:ER3EJojZmO2u6lfcdgnmC+Nrg/TV2T2bacY5FZpqgks=
