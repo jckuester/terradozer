@@ -8,6 +8,14 @@ builds:
       - CGO_ENABLED=0
     ldflags: -s -w -X github.com/jckuester/terradozer/internal.version={{.Version}} -X github.com/jckuester/terradozer/internal.commit={{.ShortCommit}} -X github.com/jckuester/terradozer/internal.date={{.Date}}
 
+brews:
+  - tap:
+      owner: jckuester
+      name: homebrew-tap
+    homepage: "https://github.com/jckuester/terradozer"
+    description: "Terraform destroy using the state only - no *.tf files needed"
+    folder: Formula
+
 archives:
   - format: tar.gz
     wrap_in_directory: true
